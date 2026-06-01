@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "generatedAt": "2024-01-15T10:30:00Z",
+  "security": {
+    "mode": "None",
+    "certificatePath": null,
+    "privateKeyPath": null
+  },
+  "namespaces": [
+    {
+      "name": "PlantFloor",
+      "uri": "urn:opcua-light:PlantFloor",
+      "folders": [
+        {
+          "name": "Temperatures",
+          "path": "PlantFloor/Temperatures",
+          "children": []
+        },
+        {
+          "name": "Pressures",
+          "path": "PlantFloor/Pressures",
+          "children": []
+        }
+      ],
+      "nodes": [
+        {
+          "name": "Sensor1",
+          "nodeId": "ns=2;s=PlantFloor.Temperatures.Sensor1",
+          "dataType": "Double",
+          "folderPath": "PlantFloor/Temperatures",
+          "initialValue": 22.5
+        },
+        {
+          "name": "Sensor2",
+          "nodeId": "ns=2;s=PlantFloor.Temperatures.Sensor2",
+          "dataType": "Double",
+          "folderPath": "PlantFloor/Temperatures",
+          "initialValue": 0.0
+        },
+        {
+          "name": "PumpActive",
+          "nodeId": "ns=2;s=PlantFloor.PumpActive",
+          "dataType": "Boolean",
+          "folderPath": "",
+          "initialValue": false
+        }
+      ]
+    }
+  ]
+}

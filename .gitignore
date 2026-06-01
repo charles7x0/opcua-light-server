@@ -1,0 +1,11 @@
+node_modules/
+dist/
+web/dist/
+*.db
+*.sqlite
+runtime/build/
+runtime/opcua-runtime
+runtime/opcua-runtime.exe
+.env
+.env.local
+coverage/

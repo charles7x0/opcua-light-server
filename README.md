@@ -1,0 +1,247 @@
+# OPC UA Light Server
+
+A lightweight OPC UA server system with a Node.js/Express Control API, an [open62541](https://www.open62541.org/) C runtime, and a React web UI. Manage your OPC UA address space, server lifecycle, security, and optional Siemens S7 PLC connections — all from a browser.
+
+## Architecture
+
+```
+┌─────────────────┐       HTTP/REST       ┌──────────────────────────────┐
+│   React Web UI  │ ◄──────────────────── │   Node.js Control API        │
+│   (Vite + TW)   │                       │   Express + better-sqlite3   │
+└─────────────────┘                       └──────────┬───────────────────┘
+                                                     │ spawn / signal
+                                                     ▼
+                                          ┌──────────────────────────────┐
+  OPC UA Clients ◄── TCP 4840 ──────────► │   open62541 Runtime (C)      │
+                                          └──────────────────────────────┘
+                                                     ▲
+                                                     │ IPC (value updates)
+                                          ┌──────────┴───────────────────┐
+                                          │   S7 Connector (nodes7)      │
+  Siemens S7 PLCs ◄── S7 ISO-on-TCP ───► │   polling + reconnection     │
+                                          └──────────────────────────────┘
+```
+
+**Key design decisions:**
+
+- The C runtime runs as a separate OS process for isolation — a crash doesn't take down the API.
+- Communication between the API and runtime uses a JSON configuration file (written by the API, read by the runtime on start/reload).
+- SQLite provides persistence with zero external infrastructure.
+
+## Features
+
+- **Address Space Management** — CRUD for namespaces, folders, and nodes via REST API and web UI
+- **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
+- **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
+- **S7 PLC Integration** — Connect to Siemens S7 PLCs, map PLC variables to OPC UA nodes with automatic polling and reconnection
+- **Web Dashboard** — Real-time server status, uptime, connected client count
+- **Authentication** — API key or JWT protection on mutating endpoints
+
+## Prerequisites
+
+- **Node.js** 18+
+- **CMake** 3.16+ and a C11 compiler (for the open62541 runtime)
+- **Git** (CMake FetchContent downloads open62541 and cJSON automatically)
+
+## Quick Start
+
+```bash
+# 1. Install Node.js dependencies
+npm install
+
+# 2. Build the Control API
+npm run build
+
+# 3. Build the Web UI
+npm run build:web
+
+# 4. Build the OPC UA runtime
+cd runtime
+mkdir build && cd build
+cmake ..
+cmake --build .
+cd ../..
+
+# 5. Configure authentication (see Configuration section)
+export AUTH_MODE=api-key
+export API_KEYS=my-secret-key
+
+# 6. Start the server
+npm start
+```
+
+The Control API starts on port 3100 by default. The web UI is served at the root path (`/`).
+
+## Development
+
+```bash
+# Start the API in watch mode
+npm run dev
+
+# Start the web UI dev server (with HMR)
+cd web && npm run dev
+
+# Run all tests
+npm test
+
+# Run specific test suites
+npm run test:unit         # Unit tests
+npm run test:property     # Property-based tests (fast-check)
+npm run test:integration  # Integration tests
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3100` | Control API listen port |
+| `AUTH_MODE` | `none` | Authentication mode: `none`, `api-key`, or `jwt` |
+| `API_KEYS` | — | Comma-separated list of valid API keys |
+| `JWT_SECRET` | — | Secret for JWT token verification |
+| `JWT_ISSUER` | — | Optional expected JWT issuer claim |
+| `DB_PATH` | `./data/opcua-light.db` | SQLite database file path |
+| `RUNTIME_PATH` | `./runtime/opcua-runtime` | Path to the compiled open62541 binary |
+
+### Authentication
+
+All mutating endpoints (POST, PUT, DELETE) require authentication. The server status endpoint (`GET /api/server/status`) is unauthenticated for health monitoring.
+
+**API Key mode:**
+
+```bash
+export AUTH_MODE=api-key
+export API_KEYS=key1,key2,key3
+```
+
+Include the key in requests via the `Authorization` header:
+
+```
+Authorization: Bearer key1
+```
+
+**JWT mode:**
+
+```bash
+export AUTH_MODE=jwt
+export JWT_SECRET=your-secret
+export JWT_ISSUER=your-issuer
+```
+
+## API Reference
+
+### Nodes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/nodes` | Create a node |
+| GET | `/api/nodes` | List all nodes |
+| GET | `/api/nodes/:id` | Get a node |
+| PUT | `/api/nodes/:id` | Update a node |
+| DELETE | `/api/nodes/:id` | Delete a node |
+
+### Namespaces
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/namespaces` | Create a namespace |
+| GET | `/api/namespaces` | List namespaces (with node counts) |
+| PUT | `/api/namespaces/:id` | Update a namespace |
+| DELETE | `/api/namespaces/:id` | Delete namespace (cascades) |
+
+### Folders
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/folders` | Create a folder |
+| GET | `/api/namespaces/:id/folders` | Get folder tree |
+| DELETE | `/api/folders/:id` | Delete folder (reassigns nodes to parent) |
+
+### Server Lifecycle
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/server/start` | Start the OPC UA runtime |
+| POST | `/api/server/stop` | Stop the OPC UA runtime |
+| POST | `/api/server/reload` | Reload address space config |
+| GET | `/api/server/status` | Get status (unauthenticated) |
+
+### Security
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/security` | Get security config |
+| PUT | `/api/security/policy` | Set security mode |
+| POST | `/api/security/certificate` | Upload certificate paths |
+
+### S7 Connector
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/s7/connections` | Create S7 connection |
+| GET | `/api/s7/connections` | List connections |
+| DELETE | `/api/s7/connections/:id` | Delete connection |
+| POST | `/api/s7/mappings` | Create PLC-to-node mapping |
+| GET | `/api/s7/mappings` | List mappings |
+| DELETE | `/api/s7/mappings/:id` | Delete mapping |
+| GET | `/api/s7/status` | Get connection statuses |
+
+## Project Structure
+
+```
+opcua-light-server/
+├── src/
+│   ├── api/              # Express routes and app setup
+│   │   ├── routes/       # Route handlers (nodes, namespaces, folders, server, security, s7)
+│   │   ├── app.ts        # Express app assembly
+│   │   └── server.ts     # Entry point
+│   ├── auth/             # Authentication middleware and config
+│   ├── config-generator/ # Generates JSON config for the runtime
+│   ├── db/               # SQLite schema, database class, repositories
+│   ├── process-manager/  # Manages the open62541 child process
+│   ├── s7-connector/     # S7 PLC polling and value updates
+│   ├── types/            # TypeScript domain types and DTOs
+│   └── shared/           # Shared utilities
+├── web/                  # React web UI (Vite + Tailwind CSS)
+│   └── src/
+│       ├── components/   # Dashboard, AddressSpaceTree, NodeForm, etc.
+│       ├── api.ts        # API client
+│       └── App.tsx       # App layout and routing
+├── runtime/              # open62541 C runtime
+│   ├── src/main.c        # Runtime entry point
+│   └── CMakeLists.txt    # CMake build config
+├── tests/
+│   ├── unit/             # Unit tests
+│   ├── property/         # Property-based tests (fast-check)
+│   ├── integration/      # Integration tests
+│   └── components/       # React component tests
+├── package.json
+├── tsconfig.json
+├── vitest.config.ts
+└── vitest.workspace.ts
+```
+
+## Testing
+
+The project uses [Vitest](https://vitest.dev/) with four test projects:
+
+- **Unit** — Repository logic, validation, middleware, route handlers
+- **Property** — Correctness properties verified with [fast-check](https://github.com/dubzzz/fast-check) (persistence round-trips, cascade deletion, uniqueness constraints, auth enforcement, etc.)
+- **Integration** — Runtime lifecycle with the actual open62541 binary
+- **Components** — React component tests with Testing Library
+
+```bash
+npm test                  # Run all
+npm run test:unit         # Unit only
+npm run test:property     # Property-based only
+npm run test:integration  # Integration only
+```
+
+## Supported OPC UA Data Types
+
+Boolean, Int16, Int32, Int64, UInt16, UInt32, UInt64, Float, Double, String, DateTime, ByteString
+
+## License
+
+Private — not published to npm.

@@ -1,0 +1,49 @@
+{
+  "name": "opcua-light-server",
+  "version": "0.1.0",
+  "description": "Lightweight OPC UA server with Node.js control API, open62541 runtime, and React web UI",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "build:web": "npm run build --prefix web",
+    "dev": "tsx watch src/api/server.ts",
+    "start": "node dist/api/server.js",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:property": "vitest run --project property",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodes7": "^0.3.16",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.60.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "fast-check": "^3.23.0",
+    "jsdom": "^29.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
