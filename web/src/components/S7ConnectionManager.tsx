@@ -23,7 +23,7 @@ import {
   ApiError,
 } from '../api';
 
-// ─── Connection Form ──────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ConnectionFormData {
   name: string;
@@ -34,380 +34,286 @@ interface ConnectionFormData {
   reconnectIntervalMs: string;
 }
 
-const EMPTY_CONNECTION_FORM: ConnectionFormData = {
-  name: '',
-  host: '',
-  rack: '0',
-  slot: '1',
-  pollingIntervalMs: '1000',
-  reconnectIntervalMs: '5000',
+const EMPTY_CONN_FORM: ConnectionFormData = {
+  name: '', host: '', rack: '0', slot: '1', pollingIntervalMs: '1000', reconnectIntervalMs: '5000',
 };
 
-// ─── Mapping Form ─────────────────────────────────────────────────────────────
-
-interface MappingFormData {
-  connectionId: string;
-  nodeId: string;
-  plcAddress: string;
-}
-
-const EMPTY_MAPPING_FORM: MappingFormData = {
-  connectionId: '',
-  nodeId: '',
-  plcAddress: '',
-};
-
-// ─── Status Indicator ─────────────────────────────────────────────────────────
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ state }: { state: S7ConnectionStatus['state'] }) {
-  const styles = {
-    connected: 'bg-green-100 text-green-800',
-    disconnected: 'bg-gray-100 text-gray-800',
-    error: 'bg-red-100 text-red-800',
-  };
-  const dotStyles = {
-    connected: 'bg-green-500',
-    disconnected: 'bg-gray-400',
-    error: 'bg-red-500',
-  };
-
+  const styles = { connected: 'bg-green-100 text-green-800', disconnected: 'bg-gray-100 text-gray-800', error: 'bg-red-100 text-red-800' };
+  const dots = { connected: 'bg-green-500', disconnected: 'bg-gray-400', error: 'bg-red-500' };
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[state]}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${dotStyles[state]}`} />
+    <span role="status" aria-label={`Connection status: ${state}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[state]}`}>
+      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${dots[state]}`} />
       {state}
     </span>
   );
 }
 
-// ─── Mappings Sub-Component ───────────────────────────────────────────────────
+// ─── Confirm Dialog ───────────────────────────────────────────────────────────
 
-function MappingsSection({
-  connections,
-  mappings,
-  mappingsLoading,
-}: {
-  connections: S7Connection[];
+function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div role="alertdialog" aria-labelledby={undefined} aria-describedby="confirm-msg" className="rounded-md border border-red-200 bg-red-50 p-3 mt-2">
+      <p id="confirm-msg" className="text-sm text-red-800">{message}</p>
+      <div className="flex gap-2 mt-2">
+        <button onClick={onConfirm} className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">Confirm</button>
+        <button onClick={onCancel} className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Connection Mappings (per connection) ─────────────────────────────────────
+
+function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
+  connection: S7Connection;
   mappings: S7MappingItem[];
-  mappingsLoading: boolean;
+  allNodes: OpcUaNode[];
+  getNodePath: (node: OpcUaNode) => string;
 }) {
   const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [showBulkForm, setShowBulkForm] = useState(false);
-  const [editingMapping, setEditingMapping] = useState<S7MappingItem | null>(null);
-  const [formConnectionId, setFormConnectionId] = useState('');
-  const [formPlcAddress, setFormPlcAddress] = useState('');
-  const [formNodeId, setFormNodeId] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const [bulkConnectionId, setBulkConnectionId] = useState('');
-  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState('');
+  const [error, setError] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // Fetch all nodes for the combobox
-  const { data: allNodes = [] } = useQuery<OpcUaNode[]>({
-    queryKey: ['nodes'],
-    queryFn: getNodes,
-  });
-
-  // Fetch namespaces and object node trees for hierarchy display
-  const { data: namespaces = [] } = useQuery<Namespace[]>({
-    queryKey: ['namespaces'],
-    queryFn: getNamespaces,
-  });
-
-  // Build a map of objectNodeId -> path for display
-  const [objectNodePaths, setObjectNodePaths] = useState<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    async function loadPaths() {
-      const paths = new Map<string, string>();
-      for (const ns of namespaces) {
-        try {
-          const tree = await getObjectNodeTree(ns.id);
-          function walk(nodes: ObjectNode[], prefix: string) {
-            for (const node of nodes) {
-              const path = prefix ? `${prefix} / ${node.name}` : node.name;
-              paths.set(node.id, `${ns.name} / ${path}`);
-              if (node.children) walk(node.children, path);
-            }
-          }
-          walk(tree, '');
-        } catch { /* ignore */ }
-      }
-      setObjectNodePaths(paths);
-    }
-    if (namespaces.length > 0) loadPaths();
-  }, [namespaces]);
-
-  /** Get display path for a node: "Namespace / ObjectNode / NodeName" */
-  function getNodeDisplayPath(node: OpcUaNode): string {
-    const ns = namespaces.find((n) => n.id === node.namespaceId);
-    const nsName = ns?.name ?? '';
-    if (node.objectNodeId) {
-      const objPath = objectNodePaths.get(node.objectNodeId);
-      return objPath ? `${objPath} / ${node.name}` : `${nsName} / ${node.name}`;
-    }
-    return `${nsName} / ${node.name}`;
+  // Editable rows state: one entry per existing mapping + new blank rows
+  interface EditableRow {
+    id: string | null; // null = new row
+    plcAddress: string;
+    description: string;
+    nodeId: string;
+    dirty: boolean;
   }
 
-  const createMutation = useMutation({
-    mutationFn: () => createS7Mapping({ connectionId: formConnectionId, nodeId: formNodeId, plcAddress: formPlcAddress }),
+  const [rows, setRows] = useState<EditableRow[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  // Sync rows from props when mappings change
+  useEffect(() => {
+    const mapped: EditableRow[] = mappings.map((m) => ({
+      id: m.id, plcAddress: m.plcAddress, description: m.description ?? '', nodeId: m.nodeId, dirty: false,
+    }));
+    // Keep any new blank rows that have content
+    const newRows = rows.filter((r) => r.id === null && (r.plcAddress || r.nodeId));
+    setRows([...mapped, ...newRows]);
+    setInitialized(true);
+  }, [mappings]);
+
+  function addBlankRow() {
+    setRows([...rows, { id: null, plcAddress: '', description: '', nodeId: '', dirty: true }]);
+  }
+
+  function updateRow(index: number, field: keyof EditableRow, value: string) {
+    const updated = [...rows];
+    (updated[index] as any)[field] = value;
+    updated[index].dirty = true;
+    setRows(updated);
+  }
+
+  function removeRow(index: number) {
+    const row = rows[index];
+    if (row.id === null) {
+      // Just remove the blank row
+      setRows(rows.filter((_, i) => i !== index));
+    } else {
+      setDeleteConfirmId(row.id);
+    }
+  }
+
+  const hasDirtyRows = rows.some((r) => r.dirty);
+
+  // Save all dirty rows
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      const dirtyRows = rows.filter((r) => r.dirty);
+      const errors: string[] = [];
+
+      for (const row of dirtyRows) {
+        if (!row.plcAddress.trim() || !row.nodeId) continue; // skip incomplete rows
+
+        if (row.id === null) {
+          // Create new
+          try {
+            await createS7Mapping({
+              connectionId: connection.id,
+              nodeId: row.nodeId,
+              plcAddress: row.plcAddress.trim(),
+              description: row.description.trim() || undefined,
+            });
+          } catch (e) {
+            errors.push(`${row.plcAddress}: ${(e as Error).message}`);
+          }
+        } else {
+          // Update existing
+          try {
+            await updateS7Mapping(row.id, {
+              plcAddress: row.plcAddress.trim(),
+              nodeId: row.nodeId,
+              description: row.description.trim() || undefined,
+            });
+          } catch (e) {
+            errors.push(`${row.plcAddress}: ${(e as Error).message}`);
+          }
+        }
+      }
+
+      if (errors.length > 0) throw new Error(errors.join('\n'));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
-      resetForm();
+      setError('');
     },
-    onError: (err: Error) => setFormError(err instanceof ApiError ? err.message : 'Failed to create'),
+    onError: (e: Error) => setError(e.message),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: () => updateS7Mapping(editingMapping!.id, { plcAddress: formPlcAddress, nodeId: formNodeId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
-      resetForm();
-    },
-    onError: (err: Error) => setFormError(err instanceof ApiError ? err.message : 'Failed to update'),
-  });
-
-  const deleteMutation = useMutation({
+  const deleteMut = useMutation({
     mutationFn: deleteS7Mapping,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['s7-mappings'] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['s7-mappings'] }); setDeleteConfirmId(null); },
   });
 
-  const bulkMutation = useMutation({
-    mutationFn: (mappingsData: Array<{ connectionId: string; nodeId: string; plcAddress: string }>) =>
-      createS7MappingsBulk(mappingsData),
+  const bulkMut = useMutation({
+    mutationFn: (data: Array<{ connectionId: string; nodeId: string; plcAddress: string }>) => createS7MappingsBulk(data),
     onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
       const failed = results.filter((r) => !r.success);
-      if (failed.length === 0) {
-        setShowBulkForm(false);
-        setBulkText('');
-        setBulkError(null);
-      } else {
-        setBulkError(`${failed.length} of ${results.length} mappings failed: ${failed.map((f) => f.error).join('; ')}`);
-      }
+      if (failed.length === 0) { setShowBulk(false); setBulkText(''); setBulkError(''); }
+      else setBulkError(`${failed.length} failed: ${failed.map((f) => f.error).join('; ')}`);
     },
-    onError: (err: Error) => setBulkError(err instanceof ApiError ? err.message : 'Bulk create failed'),
+    onError: (e: Error) => setBulkError(e instanceof ApiError ? e.message : 'Failed'),
   });
 
-  function resetForm() {
-    setShowForm(false);
-    setEditingMapping(null);
-    setFormConnectionId('');
-    setFormPlcAddress('');
-    setFormNodeId('');
-    setFormError(null);
-  }
-
-  function startEdit(mapping: S7MappingItem) {
-    setEditingMapping(mapping);
-    setFormConnectionId(mapping.connectionId);
-    setFormPlcAddress(mapping.plcAddress);
-    setFormNodeId(mapping.nodeId);
-    setShowForm(true);
-    setShowBulkForm(false);
-    setFormError(null);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
+  function handleBulk(e: React.FormEvent) {
     e.preventDefault();
-    if (!formPlcAddress.trim()) { setFormError('PLC address is required'); return; }
-    if (!formNodeId) { setFormError('OPC UA node is required'); return; }
-    if (!editingMapping && !formConnectionId) { setFormError('Connection is required'); return; }
-    setFormError(null);
-
-    if (editingMapping) {
-      updateMutation.mutate();
-    } else {
-      createMutation.mutate();
-    }
-  }
-
-  function handleBulkSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!bulkConnectionId) { setBulkError('Select a connection'); return; }
-    if (!bulkText.trim()) { setBulkError('Enter at least one mapping'); return; }
-
-    // Parse CSV: each line is "plcAddress,nodeName" or "plcAddress,nodeId"
+    if (!bulkText.trim()) { setBulkError('Enter mappings'); return; }
     const lines = bulkText.trim().split('\n').filter((l) => l.trim());
-    const mappingsData: Array<{ connectionId: string; nodeId: string; plcAddress: string }> = [];
-
+    const data: Array<{ connectionId: string; nodeId: string; plcAddress: string }> = [];
     for (const line of lines) {
-      const parts = line.split(',').map((p) => p.trim());
-      if (parts.length < 2) { setBulkError(`Invalid line: "${line}". Format: plcAddress,nodeName`); return; }
-
-      const plcAddress = parts[0];
-      const nodeRef = parts[1];
-
-      // Try to find node by name first, then by ID
-      const node = allNodes.find((n) => n.name === nodeRef) || allNodes.find((n) => n.id === nodeRef);
-      if (!node) { setBulkError(`Node not found: "${nodeRef}"`); return; }
-
-      mappingsData.push({ connectionId: bulkConnectionId, nodeId: node.id, plcAddress });
+      const [addr, ref] = line.split(',').map((s) => s.trim());
+      if (!addr || !ref) { setBulkError(`Invalid: "${line}"`); return; }
+      const node = allNodes.find((n) => n.name === ref) || allNodes.find((n) => n.id === ref);
+      if (!node) { setBulkError(`Node not found: "${ref}"`); return; }
+      data.push({ connectionId: connection.id, nodeId: node.id, plcAddress: addr });
     }
-
-    setBulkError(null);
-    bulkMutation.mutate(mappingsData);
-  }
-
-  function getNodeName(nodeId: string): string {
-    const node = allNodes.find((n) => n.id === nodeId);
-    if (!node) return nodeId.slice(0, 8) + '...';
-    return getNodeDisplayPath(node);
+    setBulkError('');
+    bulkMut.mutate(data);
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <h3 className="text-sm font-medium text-gray-900">Variable Mappings</h3>
+    <div className="border-t border-gray-200">
+      {/* Header */}
+      <div className="px-6 py-3 flex items-center justify-between bg-gray-50 border-b border-gray-100">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Variable Mappings ({mappings.length})
+        </span>
         <div className="flex gap-2">
-          <button
-            onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}
-            disabled={connections.length === 0}
-            className="rounded-md border border-blue-600 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-          >
-            {showBulkForm ? 'Cancel Bulk' : 'Bulk Add'}
+          <button onClick={() => setShowBulk(!showBulk)} className="text-xs text-gray-600 hover:text-blue-700 px-2 py-1 rounded border border-gray-300 hover:border-blue-400 bg-white">
+            {showBulk ? 'Cancel' : '📋 Bulk Import'}
           </button>
-          <button
-            onClick={() => { setShowForm(!showForm); setShowBulkForm(false); setEditingMapping(null); setFormConnectionId(''); setFormPlcAddress(''); setFormNodeId(''); }}
-            disabled={connections.length === 0}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {showForm && !editingMapping ? 'Cancel' : 'New Mapping'}
+          <button onClick={addBlankRow} className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded font-medium">
+            + Add Row
           </button>
+          {hasDirtyRows && (
+            <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="text-xs text-white bg-green-600 hover:bg-green-700 px-2 py-1 rounded font-medium disabled:opacity-50">
+              {saveMut.isPending ? 'Saving...' : '💾 Save All'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Single Mapping Form (create/edit) */}
-      {showForm && (
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <h4 className="text-xs font-semibold text-gray-700">{editingMapping ? 'Edit Mapping' : 'New Mapping'}</h4>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Connection</label>
-                <select
-                  value={formConnectionId}
-                  onChange={(e) => setFormConnectionId(e.target.value)}
-                  disabled={!!editingMapping}
-                  className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
-                >
-                  <option value="">Select connection</option>
-                  {connections.map((conn) => (
-                    <option key={conn.id} value={conn.id}>{conn.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">PLC Address</label>
-                <input
-                  type="text"
-                  value={formPlcAddress}
-                  onChange={(e) => setFormPlcAddress(e.target.value)}
-                  placeholder="DB1,REAL0"
-                  className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">OPC UA Node</label>
-                <select
-                  value={formNodeId}
-                  onChange={(e) => setFormNodeId(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Select node...</option>
-                  {allNodes.map((node) => (
-                    <option key={node.id} value={node.id}>{getNodeDisplayPath(node)} ({node.dataType})</option>
-                  ))}
-                </select>
-              </div>
+      {error && <div className="px-6 py-2 bg-red-50 border-b border-red-100"><p className="text-xs text-red-600 whitespace-pre-line">{error}</p></div>}
+
+      {/* Bulk import */}
+      {showBulk && (
+        <div className="px-6 py-4 border-b border-gray-100 bg-blue-50/40">
+          <form onSubmit={handleBulk} className="space-y-3">
+            <p className="text-xs font-medium text-gray-700">Bulk Import</p>
+            <p className="text-[11px] text-gray-500">One per line: <code className="bg-gray-100 px-1 rounded">PLCAddress,NodeName</code></p>
+            {bulkError && <p className="text-xs text-red-600">{bulkError}</p>}
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={4} placeholder={"DB1,REAL0,Temperature\nDB1,REAL4,Pressure"} className="w-full rounded border border-gray-300 px-2.5 py-1.5 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+            <div className="flex gap-2">
+              <button type="submit" disabled={bulkMut.isPending} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{bulkMut.isPending ? 'Importing...' : 'Import All'}</button>
+              <button type="button" onClick={() => { setShowBulk(false); setBulkError(''); }} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
             </div>
-            <button
-              type="submit"
-              disabled={createMutation.isPending || updateMutation.isPending}
-              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {(createMutation.isPending || updateMutation.isPending) ? 'Saving...' : editingMapping ? 'Update Mapping' : 'Create Mapping'}
-            </button>
           </form>
         </div>
       )}
 
-      {/* Bulk Add Form */}
-      {showBulkForm && (
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <form onSubmit={handleBulkSubmit} className="space-y-3">
-            <h4 className="text-xs font-semibold text-gray-700">Bulk Add Mappings</h4>
-            <p className="text-xs text-gray-500">Enter one mapping per line: <code>PLCAddress,NodeName</code></p>
-            {bulkError && <p className="text-sm text-red-600">{bulkError}</p>}
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Connection</label>
-              <select
-                value={bulkConnectionId}
-                onChange={(e) => setBulkConnectionId(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Select connection</option>
-                {connections.map((conn) => (
-                  <option key={conn.id} value={conn.id}>{conn.name}</option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              rows={6}
-              placeholder={"DB1,REAL0,Temperature\nDB1,REAL4,Pressure\nDB1,INT8,MotorSpeed"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={bulkMutation.isPending}
-              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {bulkMutation.isPending ? 'Creating...' : 'Create All Mappings'}
-            </button>
-          </form>
+      {/* Spreadsheet table */}
+      {rows.length === 0 && !showBulk ? (
+        <div className="px-6 py-4">
+          <p className="text-xs text-gray-400 italic">No variable mappings. Click "+ Add Row" to start.</p>
         </div>
+      ) : rows.length > 0 && (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-[11px] text-gray-500 uppercase tracking-wide border-b border-gray-200 bg-gray-50/50">
+              <th className="pl-6 pr-2 py-2 font-medium w-[160px]">PLC Address</th>
+              <th className="px-2 py-2 font-medium w-[160px]">Description</th>
+              <th className="px-2 py-2 font-medium">Node</th>
+              <th className="px-2 py-2 font-medium w-[70px]">Type</th>
+              <th className="px-2 pr-6 py-2 font-medium w-[40px]"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((row, idx) => {
+              const selectedNode = allNodes.find((n) => n.id === row.nodeId);
+              return (
+                <tr key={row.id ?? `new-${idx}`} className={`${row.dirty ? 'bg-yellow-50/50' : ''}`}>
+                  <td className="pl-6 pr-2 py-1">
+                    <input
+                      type="text"
+                      value={row.plcAddress}
+                      onChange={(e) => updateRow(idx, 'plcAddress', e.target.value)}
+                      placeholder="DB1,REAL0"
+                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="text"
+                      value={row.description}
+                      onChange={(e) => updateRow(idx, 'description', e.target.value)}
+                      placeholder="Label..."
+                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <select
+                      value={row.nodeId}
+                      onChange={(e) => updateRow(idx, 'nodeId', e.target.value)}
+                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">Select...</option>
+                      {allNodes.map((n) => <option key={n.id} value={n.id}>{getNodePath(n)}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {selectedNode && (
+                      <span className="inline-block rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600">{selectedNode.dataType}</span>
+                    )}
+                  </td>
+                  <td className="px-2 pr-6 py-1 text-center">
+                    <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600 text-sm" title="Remove row">×</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
-      {/* Mappings Table */}
-      {mappingsLoading ? (
-        <p className="px-6 py-4 text-sm text-gray-500">Loading mappings...</p>
-      ) : mappings.length === 0 ? (
-        <p className="px-6 py-4 text-sm text-gray-500">No variable mappings configured.</p>
-      ) : (
-        <div className="divide-y divide-gray-200">
-          {mappings.map((mapping) => {
-            const conn = connections.find((c) => c.id === mapping.connectionId);
-            return (
-              <div key={mapping.id} className="px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-gray-500 min-w-[80px]">{conn?.name ?? 'Unknown'}</span>
-                  <span className="font-mono text-gray-900">{mapping.plcAddress}</span>
-                  <span className="text-gray-400">→</span>
-                  <span className="text-gray-700">{getNodeName(mapping.nodeId)}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => startEdit(mapping)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteMutation.mutate(mapping.id)}
-                    disabled={deleteMutation.isPending}
-                    className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+      {/* Delete confirmation */}
+      {deleteConfirmId && (
+        <div className="px-6 py-3 border-t border-gray-100">
+          <ConfirmDialog
+            message={`Delete mapping "${mappings.find((m) => m.id === deleteConfirmId)?.plcAddress}"?`}
+            onConfirm={() => deleteMut.mutate(deleteConfirmId)}
+            onCancel={() => setDeleteConfirmId(null)}
+          />
         </div>
       )}
     </div>
@@ -418,333 +324,176 @@ function MappingsSection({
 
 export function S7ConnectionManager() {
   const queryClient = useQueryClient();
-  const [showConnectionForm, setShowConnectionForm] = useState(false);
-  const [editingConnection, setEditingConnection] = useState<S7Connection | null>(null);
-  const [connectionForm, setConnectionForm] = useState<ConnectionFormData>(EMPTY_CONNECTION_FORM);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showConnForm, setShowConnForm] = useState(false);
+  const [editingConn, setEditingConn] = useState<S7Connection | null>(null);
+  const [connForm, setConnForm] = useState<ConnectionFormData>(EMPTY_CONN_FORM);
+  const [connError, setConnError] = useState('');
+  const [deleteConnId, setDeleteConnId] = useState<string | null>(null);
 
-  // ─── Queries ────────────────────────────────────────────────────────────────
+  // Queries
+  const { data: connections = [], isLoading } = useQuery<S7Connection[]>({ queryKey: ['s7-connections'], queryFn: getS7Connections });
+  const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({ queryKey: ['s7-status'], queryFn: getS7Status, refetchInterval: 5000 });
+  const { data: mappings = [] } = useQuery<S7MappingItem[]>({ queryKey: ['s7-mappings'], queryFn: getS7Mappings });
+  const { data: allNodes = [] } = useQuery<OpcUaNode[]>({ queryKey: ['nodes'], queryFn: getNodes });
+  const { data: namespaces = [] } = useQuery<Namespace[]>({ queryKey: ['namespaces'], queryFn: getNamespaces });
 
-  const { data: connections = [], isLoading: connectionsLoading } = useQuery<S7Connection[]>({
-    queryKey: ['s7-connections'],
-    queryFn: getS7Connections,
-  });
-
-  const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({
-    queryKey: ['s7-status'],
-    queryFn: getS7Status,
-    refetchInterval: 5000,
-  });
-
-  const { data: mappings = [], isLoading: mappingsLoading } = useQuery<S7MappingItem[]>({
-    queryKey: ['s7-mappings'],
-    queryFn: getS7Mappings,
-  });
-
-  // ─── Mutations ──────────────────────────────────────────────────────────────
-
-  const createConnectionMutation = useMutation({
-    mutationFn: (data: ConnectionFormData) =>
-      createS7Connection({
-        name: data.name,
-        host: data.host,
-        rack: parseInt(data.rack, 10),
-        slot: parseInt(data.slot, 10),
-        pollingIntervalMs: parseInt(data.pollingIntervalMs, 10),
-        reconnectIntervalMs: parseInt(data.reconnectIntervalMs, 10),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['s7-connections'] });
-      queryClient.invalidateQueries({ queryKey: ['s7-status'] });
-      setConnectionForm(EMPTY_CONNECTION_FORM);
-      setShowConnectionForm(false);
-      setEditingConnection(null);
-      setConnectionError(null);
-    },
-    onError: (err: Error) => {
-      if (err instanceof ApiError) {
-        setConnectionError(err.message);
-      } else {
-        setConnectionError('Failed to create connection');
+  // Object node paths for hierarchy display
+  const [objPaths, setObjPaths] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    async function load() {
+      const paths = new Map<string, string>();
+      for (const ns of namespaces) {
+        try {
+          const tree = await getObjectNodeTree(ns.id);
+          function walk(nodes: ObjectNode[], prefix: string) {
+            for (const n of nodes) {
+              const p = prefix ? `${prefix} / ${n.name}` : n.name;
+              paths.set(n.id, `${ns.name} / ${p}`);
+              if (n.children) walk(n.children, p);
+            }
+          }
+          walk(tree, '');
+        } catch { /* ignore */ }
       }
-    },
+      setObjPaths(paths);
+    }
+    if (namespaces.length > 0) load();
+  }, [namespaces]);
+
+  function getNodePath(node: OpcUaNode): string {
+    const ns = namespaces.find((n) => n.id === node.namespaceId);
+    const nsName = ns?.name ?? '';
+    if (node.objectNodeId) {
+      const op = objPaths.get(node.objectNodeId);
+      return op ? `${op} / ${node.name}` : `${nsName} / ${node.name}`;
+    }
+    return `${nsName} / ${node.name}`;
+  }
+
+  // Mutations
+  const createConnMut = useMutation({
+    mutationFn: (d: ConnectionFormData) => createS7Connection({ name: d.name, host: d.host, rack: parseInt(d.rack), slot: parseInt(d.slot), pollingIntervalMs: parseInt(d.pollingIntervalMs), reconnectIntervalMs: parseInt(d.reconnectIntervalMs) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['s7-connections'] }); queryClient.invalidateQueries({ queryKey: ['s7-status'] }); resetConnForm(); },
+    onError: (e: Error) => setConnError(e instanceof ApiError ? e.message : 'Failed'),
   });
 
-  const updateConnectionMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ConnectionFormData }) =>
-      updateS7Connection(id, {
-        name: data.name,
-        host: data.host,
-        rack: parseInt(data.rack, 10),
-        slot: parseInt(data.slot, 10),
-        pollingIntervalMs: parseInt(data.pollingIntervalMs, 10),
-        reconnectIntervalMs: parseInt(data.reconnectIntervalMs, 10),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['s7-connections'] });
-      queryClient.invalidateQueries({ queryKey: ['s7-status'] });
-      setConnectionForm(EMPTY_CONNECTION_FORM);
-      setShowConnectionForm(false);
-      setEditingConnection(null);
-      setConnectionError(null);
-    },
-    onError: (err: Error) => {
-      if (err instanceof ApiError) {
-        setConnectionError(err.message);
-      } else {
-        setConnectionError('Failed to update connection');
-      }
-    },
+  const updateConnMut = useMutation({
+    mutationFn: ({ id, d }: { id: string; d: ConnectionFormData }) => updateS7Connection(id, { name: d.name, host: d.host, rack: parseInt(d.rack), slot: parseInt(d.slot), pollingIntervalMs: parseInt(d.pollingIntervalMs), reconnectIntervalMs: parseInt(d.reconnectIntervalMs) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['s7-connections'] }); queryClient.invalidateQueries({ queryKey: ['s7-status'] }); resetConnForm(); },
+    onError: (e: Error) => setConnError(e instanceof ApiError ? e.message : 'Failed'),
   });
 
-  const deleteConnectionMutation = useMutation({
+  const deleteConnMut = useMutation({
     mutationFn: deleteS7Connection,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['s7-connections'] });
-      queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
-      queryClient.invalidateQueries({ queryKey: ['s7-status'] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['s7-connections'] }); queryClient.invalidateQueries({ queryKey: ['s7-mappings'] }); queryClient.invalidateQueries({ queryKey: ['s7-status'] }); setDeleteConnId(null); },
   });
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  function resetConnForm() { setShowConnForm(false); setEditingConn(null); setConnForm(EMPTY_CONN_FORM); setConnError(''); }
 
-  function getStatusForConnection(connectionId: string): S7ConnectionStatus | undefined {
-    return statuses.find((s) => s.connectionId === connectionId);
+  function startEditConn(c: S7Connection) {
+    setEditingConn(c);
+    setConnForm({ name: c.name, host: c.host, rack: String(c.rack), slot: String(c.slot), pollingIntervalMs: String(c.pollingIntervalMs), reconnectIntervalMs: String(c.reconnectIntervalMs) });
+    setShowConnForm(true); setConnError('');
   }
 
-  function handleConnectionSubmit(e: React.FormEvent) {
+  function handleConnSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!connectionForm.name.trim() || !connectionForm.host.trim()) {
-      setConnectionError('Name and host are required');
-      return;
-    }
-    setConnectionError(null);
-
-    if (editingConnection) {
-      updateConnectionMutation.mutate({ id: editingConnection.id, data: connectionForm });
-    } else {
-      createConnectionMutation.mutate(connectionForm);
-    }
+    if (!connForm.name.trim() || !connForm.host.trim()) { setConnError('Name and host required'); return; }
+    setConnError('');
+    editingConn ? updateConnMut.mutate({ id: editingConn.id, d: connForm }) : createConnMut.mutate(connForm);
   }
 
-  function startEditConnection(conn: S7Connection) {
-    setEditingConnection(conn);
-    setConnectionForm({
-      name: conn.name,
-      host: conn.host,
-      rack: String(conn.rack),
-      slot: String(conn.slot),
-      pollingIntervalMs: String(conn.pollingIntervalMs),
-      reconnectIntervalMs: String(conn.reconnectIntervalMs),
-    });
-    setShowConnectionForm(true);
-    setConnectionError(null);
-  }
-
-  function cancelConnectionForm() {
-    setShowConnectionForm(false);
-    setEditingConnection(null);
-    setConnectionForm(EMPTY_CONNECTION_FORM);
-    setConnectionError(null);
-  }
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
-
-  if (connectionsLoading) {
-    return (
-      <div className="p-6">
-        <p className="text-gray-500">Loading S7 connections...</p>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="p-6" aria-live="polite"><p className="text-gray-500">Loading S7 connections...</p></div>;
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">S7 Connections</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Manage Siemens S7 PLC connections and variable mappings.
-        </p>
+        <h2 className="text-lg font-semibold text-gray-900">S7 PLC Connections</h2>
+        <p className="mt-1 text-sm text-gray-500">Manage Siemens S7 PLC connections and variable mappings.</p>
       </div>
 
-      {/* Connections List */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h3 className="text-sm font-medium text-gray-900">Connections</h3>
-          <button
-            onClick={() => {
-              if (showConnectionForm) {
-                cancelConnectionForm();
-              } else {
-                setShowConnectionForm(true);
-                setEditingConnection(null);
-                setConnectionForm(EMPTY_CONNECTION_FORM);
-              }
-            }}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-          >
-            {showConnectionForm ? 'Cancel' : 'New Connection'}
-          </button>
-        </div>
+      {/* New Connection button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => { showConnForm ? resetConnForm() : setShowConnForm(true); }}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          {showConnForm ? 'Cancel' : '+ New Connection'}
+        </button>
+      </div>
 
-        {/* New Connection Form */}
-        {showConnectionForm && (
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <form onSubmit={handleConnectionSubmit} className="space-y-3">
-              {connectionError && (
-                <p className="text-sm text-red-600">{connectionError}</p>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="conn-name" className="block text-xs text-gray-600 mb-1">
-                    Name
-                  </label>
-                  <input
-                    id="conn-name"
-                    type="text"
-                    value={connectionForm.name}
-                    onChange={(e) => setConnectionForm({ ...connectionForm, name: e.target.value })}
-                    placeholder="PLC-1"
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
+      {/* Connection Form */}
+      {showConnForm && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">{editingConn ? 'Edit Connection' : 'New Connection'}</h3>
+          {connError && <p role="alert" className="text-sm text-red-600 mb-3">{connError}</p>}
+          <form onSubmit={handleConnSubmit} aria-label={editingConn ? `Edit connection ${editingConn.name}` : 'New S7 connection'} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label htmlFor="conn-name" className="block text-xs text-gray-600 mb-1">Name</label><input id="conn-name" type="text" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} placeholder="PLC-1" className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <div><label htmlFor="conn-host" className="block text-xs text-gray-600 mb-1">Host</label><input id="conn-host" type="text" value={connForm.host} onChange={(e) => setConnForm({ ...connForm, host: e.target.value })} placeholder="192.168.1.10" className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <div><label htmlFor="conn-rack" className="block text-xs text-gray-600 mb-1">Rack</label><input id="conn-rack" type="number" min="0" value={connForm.rack} onChange={(e) => setConnForm({ ...connForm, rack: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <div><label htmlFor="conn-slot" className="block text-xs text-gray-600 mb-1">Slot</label><input id="conn-slot" type="number" min="0" value={connForm.slot} onChange={(e) => setConnForm({ ...connForm, slot: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <div><label htmlFor="conn-polling" className="block text-xs text-gray-600 mb-1">Polling (ms)</label><input id="conn-polling" type="number" min="100" value={connForm.pollingIntervalMs} onChange={(e) => setConnForm({ ...connForm, pollingIntervalMs: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <div><label htmlFor="conn-reconnect" className="block text-xs text-gray-600 mb-1">Reconnect (ms)</label><input id="conn-reconnect" type="number" min="1000" value={connForm.reconnectIntervalMs} onChange={(e) => setConnForm({ ...connForm, reconnectIntervalMs: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="submit" disabled={createConnMut.isPending || updateConnMut.isPending} className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {(createConnMut.isPending || updateConnMut.isPending) ? 'Saving...' : editingConn ? 'Update' : 'Create'}
+              </button>
+              <button type="button" onClick={resetConnForm} className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Connection Cards with embedded mappings */}
+      {connections.length === 0 && !showConnForm ? (
+        <p className="text-sm text-gray-500">No S7 connections configured.</p>
+      ) : (
+        connections.map((conn) => {
+          const status = statuses.find((s) => s.connectionId === conn.id);
+          const connMappings = mappings.filter((m) => m.connectionId === conn.id);
+
+          return (
+            <div key={conn.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {/* Connection header */}
+              <div className="px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{conn.name}</p>
+                    <p className="text-xs text-gray-500">{conn.host} · Rack {conn.rack} · Slot {conn.slot} · Poll {conn.pollingIntervalMs}ms</p>
+                  </div>
+                  <StatusBadge state={status?.state ?? 'disconnected'} />
+                  {status?.errorMessage && <span className="text-xs text-red-600">{status.errorMessage}</span>}
                 </div>
-                <div>
-                  <label htmlFor="conn-host" className="block text-xs text-gray-600 mb-1">
-                    Host
-                  </label>
-                  <input
-                    id="conn-host"
-                    type="text"
-                    value={connectionForm.host}
-                    onChange={(e) => setConnectionForm({ ...connectionForm, host: e.target.value })}
-                    placeholder="192.168.1.10"
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="conn-rack" className="block text-xs text-gray-600 mb-1">
-                    Rack
-                  </label>
-                  <input
-                    id="conn-rack"
-                    type="number"
-                    min="0"
-                    value={connectionForm.rack}
-                    onChange={(e) => setConnectionForm({ ...connectionForm, rack: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="conn-slot" className="block text-xs text-gray-600 mb-1">
-                    Slot
-                  </label>
-                  <input
-                    id="conn-slot"
-                    type="number"
-                    min="0"
-                    value={connectionForm.slot}
-                    onChange={(e) => setConnectionForm({ ...connectionForm, slot: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="conn-polling" className="block text-xs text-gray-600 mb-1">
-                    Polling Interval (ms)
-                  </label>
-                  <input
-                    id="conn-polling"
-                    type="number"
-                    min="100"
-                    value={connectionForm.pollingIntervalMs}
-                    onChange={(e) =>
-                      setConnectionForm({ ...connectionForm, pollingIntervalMs: e.target.value })
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="conn-reconnect" className="block text-xs text-gray-600 mb-1">
-                    Reconnect Interval (ms)
-                  </label>
-                  <input
-                    id="conn-reconnect"
-                    type="number"
-                    min="1000"
-                    value={connectionForm.reconnectIntervalMs}
-                    onChange={(e) =>
-                      setConnectionForm({ ...connectionForm, reconnectIntervalMs: e.target.value })
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
+                <div className="flex items-center gap-3">
+                  <button onClick={() => startEditConn(conn)} aria-label={`Edit connection ${conn.name}`} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
+                  <button onClick={() => setDeleteConnId(conn.id)} aria-label={`Delete connection ${conn.name}`} className="text-sm text-red-600 hover:text-red-800">Delete</button>
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={createConnectionMutation.isPending || updateConnectionMutation.isPending}
-                className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {(createConnectionMutation.isPending || updateConnectionMutation.isPending)
-                  ? 'Saving...'
-                  : editingConnection
-                    ? 'Update Connection'
-                    : 'Create Connection'}
-              </button>
-            </form>
-          </div>
-        )}
 
-        {/* Connections Table */}
-        {connections.length === 0 ? (
-          <p className="px-6 py-4 text-sm text-gray-500">No S7 connections configured.</p>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {connections.map((conn) => {
-              const status = getStatusForConnection(conn.id);
-              return (
-                <div key={conn.id} className="px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{conn.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {conn.host} · Rack {conn.rack} · Slot {conn.slot} · Poll{' '}
-                        {conn.pollingIntervalMs}ms
-                      </p>
-                    </div>
-                    <StatusBadge state={status?.state ?? 'disconnected'} />
-                    {status?.errorMessage && (
-                      <span className="text-xs text-red-600">{status.errorMessage}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => startEditConnection(conn)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                      aria-label={`Edit connection ${conn.name}`}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteConnectionMutation.mutate(conn.id)}
-                      disabled={deleteConnectionMutation.isPending}
-                      className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
-                      aria-label={`Delete connection ${conn.name}`}
-                    >
-                      Delete
-                    </button>
-                  </div>
+              {/* Delete confirmation */}
+              {deleteConnId === conn.id && (
+                <div className="px-6 pb-3">
+                  <ConfirmDialog
+                    message={`Delete "${conn.name}" and all its mappings? This cannot be undone.`}
+                    onConfirm={() => deleteConnMut.mutate(conn.id)}
+                    onCancel={() => setDeleteConnId(null)}
+                  />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              )}
 
-      {/* Mappings Section */}
-      <MappingsSection
-        connections={connections}
-        mappings={mappings}
-        mappingsLoading={mappingsLoading}
-      />
+              {/* Mappings for this connection */}
+              <ConnectionMappings
+                connection={conn}
+                mappings={connMappings}
+                allNodes={allNodes}
+                getNodePath={getNodePath}
+              />
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

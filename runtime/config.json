@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-01T17:42:09.224Z",
+  "generatedAt": "2026-06-02T17:32:33.690Z",
   "security": {
     "mode": "None"
   },
@@ -23,43 +23,33 @@
       "nodes": [
         {
           "name": "BitTest",
-          "nodeId": "ns=2;s=GrupoMoura.SLR02.BitTest",
+          "nodeId": "ns=2;s=GrupoMoura.SLR01.BitTest",
           "dataType": "Boolean",
-          "parentPath": "GrupoMoura.SLR02",
+          "parentPath": "GrupoMoura.SLR01",
+          "s7Mapping": {
+            "connectionHost": "10.1.24.50",
+            "plcAddress": "M0.0"
+          }
+        },
+        {
+          "name": "ChangeType",
+          "nodeId": "ns=2;s=GrupoMoura.SLR01.ChangeType",
+          "dataType": "Boolean",
+          "parentPath": "GrupoMoura.SLR01",
           "s7Mapping": {
             "connectionHost": "10.1.24.50",
             "plcAddress": "M0.1"
           }
         },
         {
-          "name": "Current 1",
-          "nodeId": "ns=2;s=GrupoMoura.SLR02.Current 1",
-          "dataType": "Double",
-          "parentPath": "GrupoMoura.SLR02"
-        },
-        {
           "name": "Test1",
-          "nodeId": "ns=2;s=GrupoMoura.SLR01.Test1",
+          "nodeId": "ns=2;s=GrupoMoura.SLR02.Test1",
           "dataType": "Boolean",
-          "parentPath": "GrupoMoura.SLR01"
-        },
-        {
-          "name": "Test2",
-          "nodeId": "ns=2;s=GrupoMoura.SLR01.Test2",
-          "dataType": "Double",
-          "parentPath": "GrupoMoura.SLR01"
-        },
-        {
-          "name": "Test3",
-          "nodeId": "ns=2;s=GrupoMoura.SLR01.Test3",
-          "dataType": "Double",
-          "parentPath": "GrupoMoura.SLR01"
-        },
-        {
-          "name": "Test4",
-          "nodeId": "ns=2;s=GrupoMoura.SLR01.Test4",
-          "dataType": "Double",
-          "parentPath": "GrupoMoura.SLR01"
+          "parentPath": "GrupoMoura.SLR02",
+          "s7Mapping": {
+            "connectionHost": "10.1.24.50",
+            "plcAddress": "M0.2"
+          }
         }
       ]
     }

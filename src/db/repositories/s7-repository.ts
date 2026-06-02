@@ -27,6 +27,7 @@ interface S7MappingRow {
   connection_id: string;
   node_id: string;
   plc_address: string;
+  description: string | null;
   created_at: string;
 }
 
@@ -56,6 +57,7 @@ function rowToMapping(row: S7MappingRow): S7Mapping {
     connectionId: row.connection_id,
     nodeId: row.node_id,
     plcAddress: row.plc_address,
+    description: row.description ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -264,9 +266,9 @@ export class S7Repository {
 
     const mapping = this.database.write((db) => {
       db.prepare(
-        `INSERT INTO s7_mappings (id, connection_id, node_id, plc_address, created_at)
-         VALUES (?, ?, ?, ?, datetime('now'))`
-      ).run(id, request.connectionId, request.nodeId, request.plcAddress);
+        `INSERT INTO s7_mappings (id, connection_id, node_id, plc_address, description, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      ).run(id, request.connectionId, request.nodeId, request.plcAddress, request.description ?? null);
 
       return db.prepare('SELECT * FROM s7_mappings WHERE id = ?').get(id) as S7MappingRow;
     });
@@ -336,7 +338,7 @@ export class S7Repository {
    * Update an existing S7 mapping.
    * Allows changing the PLC address or node ID.
    */
-  updateMapping(id: string, request: { plcAddress?: string; nodeId?: string }): S7Result<S7Mapping> {
+  updateMapping(id: string, request: { plcAddress?: string; nodeId?: string; description?: string }): S7Result<S7Mapping> {
     const existing = this.findMappingById(id);
     if (!existing) {
       return {
@@ -393,6 +395,7 @@ export class S7Repository {
 
       if (request.plcAddress !== undefined) { updates.push('plc_address = ?'); values.push(request.plcAddress); }
       if (request.nodeId !== undefined) { updates.push('node_id = ?'); values.push(request.nodeId); }
+      if (request.description !== undefined) { updates.push('description = ?'); values.push(request.description); }
 
       if (updates.length > 0) {
         values.push(id);

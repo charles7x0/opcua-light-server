@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * In-memory cache for read operations when SQLite becomes inaccessible.
@@ -117,6 +117,10 @@ export class Database {
         db.exec(`
           ALTER TABLE nodes RENAME COLUMN folder_id TO object_node_id;
         `);
+      },
+      // Migration 3: Add description column to s7_mappings
+      3: (db) => {
+        db.exec(`ALTER TABLE s7_mappings ADD COLUMN description TEXT;`);
       },
     };
 

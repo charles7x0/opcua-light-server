@@ -93,6 +93,7 @@ export interface S7Mapping {
   connectionId: string;
   nodeId: string;
   plcAddress: string;
+  description?: string;
   createdAt: string;
 }
 

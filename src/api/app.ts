@@ -68,7 +68,7 @@ export function createApp(deps: AppDependencies): Express {
   // mutating request to nodes, object-nodes, or namespaces, we regenerate
   // the config and signal the runtime to reload (if it's running).
   const CONFIG_FILE_PATH = 'runtime/config.json';
-  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces'];
+  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces', '/api/s7/mappings'];
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'GET') return next();

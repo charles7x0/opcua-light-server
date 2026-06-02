@@ -213,6 +213,7 @@ export interface S7MappingItem {
   connectionId: string;
   nodeId: string;
   plcAddress: string;
+  description?: string;
   createdAt: string;
 }
 
@@ -262,11 +263,12 @@ export function createS7Mapping(data: {
   connectionId: string;
   nodeId: string;
   plcAddress: string;
+  description?: string;
 }): Promise<S7MappingItem> {
   return request<S7MappingItem>('/s7/mappings', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateS7Mapping(id: string, data: { plcAddress?: string; nodeId?: string }): Promise<S7MappingItem> {
+export function updateS7Mapping(id: string, data: { plcAddress?: string; nodeId?: string; description?: string }): Promise<S7MappingItem> {
   return request<S7MappingItem>(`/s7/mappings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 

@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS s7_mappings (
     connection_id TEXT NOT NULL REFERENCES s7_connections(id) ON DELETE CASCADE,
     node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     plc_address TEXT NOT NULL,
+    description TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(connection_id, plc_address),
     UNIQUE(node_id)
@@ -85,3 +86,4 @@ INSERT OR IGNORE INTO security_config (id, mode) VALUES (1, 'None');
 -- Record schema version
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);

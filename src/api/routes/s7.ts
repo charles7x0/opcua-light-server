@@ -192,6 +192,13 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
       return res.status(status).json(errorResponse);
     }
 
+    // Notify the S7 Connector so it starts polling this address
+    if (s7Connector && result.data) {
+      try {
+        s7Connector.addMapping(result.data);
+      } catch { /* connector may not have the connection tracked yet */ }
+    }
+
     return res.status(201).json(result.data);
   });
 
@@ -217,19 +224,24 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
       return res.status(404).json(errorResponse);
     }
 
+    // Notify the S7 Connector to stop polling this address
+    if (s7Connector) {
+      try { s7Connector.removeMapping(id); } catch { /* may not exist in connector */ }
+    }
+
     return res.status(204).send();
   });
 
   /** PUT /api/s7/mappings/:id - Update an S7 mapping */
   router.put('/mappings/:id', (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const body = req.body as Partial<{ plcAddress: string; nodeId: string }>;
+    const body = req.body as Partial<{ plcAddress: string; nodeId: string; description: string }>;
 
-    if (!body.plcAddress && !body.nodeId) {
+    if (!body.plcAddress && !body.nodeId && body.description === undefined) {
       const errorResponse: ErrorResponse = {
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'At least one field (plcAddress or nodeId) must be provided',
+          message: 'At least one field (plcAddress, nodeId, or description) must be provided',
         },
       };
       return res.status(400).json(errorResponse);
@@ -283,6 +295,10 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
 
       if (result.success) {
         results.push({ index: i, success: true, data: result.data });
+        // Notify the S7 Connector
+        if (s7Connector && result.data) {
+          try { s7Connector.addMapping(result.data); } catch { /* ignore */ }
+        }
       } else {
         results.push({ index: i, success: false, error: result.error.message });
       }

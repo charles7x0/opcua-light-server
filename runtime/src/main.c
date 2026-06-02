@@ -434,7 +434,18 @@ static void create_variable_node(UA_Server *server, cJSON *node_json,
     UA_NodeId variable_node_id;
     if (node_id_str && strlen(node_id_str) > 0) {
         /* Parse the nodeId string (format: "ns=X;s=StringId") */
-        variable_node_id = UA_NODEID_STRING(ns_index, (char *)node_id_str);
+        if (strncmp(node_id_str, "ns=", 3) == 0) {
+            /* Skip "ns=X;s=" prefix to get the actual string identifier */
+            const char *p = node_id_str + 3;
+            while (*p >= '0' && *p <= '9') p++;
+            if (*p == ';' && *(p+1) == 's' && *(p+2) == '=') {
+                variable_node_id = UA_NODEID_STRING(ns_index, (char *)(p + 3));
+            } else {
+                variable_node_id = UA_NODEID_STRING(ns_index, (char *)node_id_str);
+            }
+        } else {
+            variable_node_id = UA_NODEID_STRING(ns_index, (char *)node_id_str);
+        }
     } else {
         variable_node_id = UA_NODEID_STRING(ns_index, (char *)name);
     }
@@ -590,16 +601,105 @@ static int configure_security(UA_Server *server, cJSON *security) {
 
 static void clear_address_space(UA_Server *server) {
     /*
-     * On reload, we delete all nodes that were added by our configuration.
-     * The simplest approach for the MVP is to delete all nodes in custom
-     * namespaces (ns >= 2). open62541 doesn't provide a bulk-delete API,
-     * so we rely on re-creating the server or selectively removing nodes.
-     *
-     * For the MVP, we log the reload and rebuild. A full implementation
-     * would track created node IDs and delete them individually.
+     * On reload, delete all custom nodes by re-reading the current config
+     * and removing each node that was previously created.
+     * We delete in reverse order: variable nodes first, then object nodes,
+     * then the namespace root objects.
      */
-    (void)server;
     printf("  Clearing custom address space nodes for reload...\n");
+
+    char *json_str = read_file(g_config_path);
+    if (!json_str) return;
+
+    cJSON *config = cJSON_Parse(json_str);
+    free(json_str);
+    if (!config) return;
+
+    cJSON *namespaces = cJSON_GetObjectItemCaseSensitive(config, "namespaces");
+    if (!cJSON_IsArray(namespaces)) {
+        cJSON_Delete(config);
+        return;
+    }
+
+    cJSON *ns_item = NULL;
+    cJSON_ArrayForEach(ns_item, namespaces) {
+        cJSON *name_item = cJSON_GetObjectItemCaseSensitive(ns_item, "name");
+        cJSON *uri_item = cJSON_GetObjectItemCaseSensitive(ns_item, "uri");
+        cJSON *nodes_item = cJSON_GetObjectItemCaseSensitive(ns_item, "nodes");
+        cJSON *object_nodes_item = cJSON_GetObjectItemCaseSensitive(ns_item, "objectNodes");
+
+        const char *ns_uri = cJSON_GetStringValue(uri_item);
+        const char *ns_name = cJSON_GetStringValue(name_item);
+        if (!ns_uri) continue;
+
+        /* Find the namespace index */
+        size_t found_index = 0;
+        UA_String uri_str = UA_STRING((char *)ns_uri);
+        UA_StatusCode ns_status = UA_Server_getNamespaceByName(server, uri_str, &found_index);
+        if (ns_status != UA_STATUSCODE_GOOD) continue;
+        UA_UInt16 ns_index = (UA_UInt16)found_index;
+
+        /* Delete variable nodes */
+        if (cJSON_IsArray(nodes_item)) {
+            cJSON *node_item = NULL;
+            cJSON_ArrayForEach(node_item, nodes_item) {
+                cJSON *nid = cJSON_GetObjectItemCaseSensitive(node_item, "nodeId");
+                const char *nid_str = cJSON_GetStringValue(nid);
+                if (!nid_str) continue;
+
+                /* Parse "ns=X;s=StringId" */
+                UA_NodeId nodeId = UA_NODEID_NULL;
+                if (strncmp(nid_str, "ns=", 3) == 0) {
+                    const char *p = nid_str + 3;
+                    while (*p >= '0' && *p <= '9') p++;
+                    if (*p == ';' && *(p+1) == 's' && *(p+2) == '=') {
+                        nodeId = UA_NODEID_STRING(ns_index, (char *)(p + 3));
+                    }
+                }
+                if (!UA_NodeId_isNull(&nodeId)) {
+                    UA_Server_deleteNode(server, nodeId, UA_TRUE);
+                }
+            }
+        }
+
+        /* Delete object nodes (recursive helper) */
+        if (cJSON_IsArray(object_nodes_item)) {
+            /* Delete object nodes depth-first */
+            cJSON *obj_node = NULL;
+            cJSON_ArrayForEach(obj_node, object_nodes_item) {
+                cJSON *path_item = cJSON_GetObjectItemCaseSensitive(obj_node, "path");
+                cJSON *children = cJSON_GetObjectItemCaseSensitive(obj_node, "children");
+                const char *path = cJSON_GetStringValue(path_item);
+
+                /* Recursively delete children first */
+                if (cJSON_IsArray(children)) {
+                    cJSON *child = NULL;
+                    cJSON_ArrayForEach(child, children) {
+                        cJSON *child_path = cJSON_GetObjectItemCaseSensitive(child, "path");
+                        const char *cp = cJSON_GetStringValue(child_path);
+                        if (cp) {
+                            UA_NodeId childId = UA_NODEID_STRING(ns_index, (char *)cp);
+                            UA_Server_deleteNode(server, childId, UA_TRUE);
+                        }
+                    }
+                }
+
+                if (path) {
+                    UA_NodeId objId = UA_NODEID_STRING(ns_index, (char *)path);
+                    UA_Server_deleteNode(server, objId, UA_TRUE);
+                }
+            }
+        }
+
+        /* Delete the namespace root object node */
+        if (ns_name) {
+            UA_NodeId nsRootId = UA_NODEID_STRING(ns_index, (char *)ns_name);
+            UA_Server_deleteNode(server, nsRootId, UA_TRUE);
+        }
+    }
+
+    cJSON_Delete(config);
+    printf("  Address space cleared.\n");
 }
 
 /* ─── Reload Handler ───────────────────────────────────────────────────────── */

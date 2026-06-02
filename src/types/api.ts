@@ -108,6 +108,7 @@ export interface CreateS7MappingRequest {
   connectionId: string;
   nodeId: string;
   plcAddress: string;
+  description?: string;
 }
 
 // --- Server Lifecycle DTOs ---
