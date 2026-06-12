@@ -18,6 +18,12 @@ export interface SecurityConfigOutput {
   mode: 'None' | 'Sign' | 'SignAndEncrypt';
   certificatePath?: string;
   privateKeyPath?: string;
+  /** OPC UA Application URI that must match the certificate's SubjectAltName URI entry. */
+  applicationUri?: string;
+  /** Absolute path to the PKI trusted certificates directory. Present only when mode is Sign or SignAndEncrypt. */
+  pkiTrustedPath?: string;
+  /** Absolute path to the PKI rejected certificates directory. Present only when mode is Sign or SignAndEncrypt. */
+  pkiRejectedPath?: string;
 }
 
 /** A namespace entry in the runtime configuration. */

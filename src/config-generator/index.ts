@@ -1,4 +1,5 @@
-import { writeFileSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
+import { resolve } from 'path';
 import type { Database } from '../db/database.js';
 import type {
   AddressSpaceConfig,
@@ -85,6 +86,13 @@ export class ConfigGenerator {
    * Build the security configuration section from the security_config table.
    * Unlike the SecurityRepository.get() method, this includes the private key path
    * because the runtime needs it to load certificates.
+   *
+   * If mode requires encryption but certificate/key paths are missing,
+   * falls back to "None" to prevent the runtime from crashing on startup.
+   *
+   * When mode is Sign or SignAndEncrypt, includes pkiTrustedPath and pkiRejectedPath
+   * with absolute paths to the PKI directories. Falls back to "None" if the
+   * PKI directories do not exist.
    */
   private buildSecurityConfig(db: import('better-sqlite3').Database): SecurityConfigOutput {
     const row = db.prepare(
@@ -92,6 +100,16 @@ export class ConfigGenerator {
     ).get() as SecurityConfigRow | undefined;
 
     if (!row) {
+      return { mode: 'None' };
+    }
+
+    // If encryption is requested but cert/key paths are not configured,
+    // fall back to None to avoid a runtime crash (exit code 1).
+    if (row.mode !== 'None' && (!row.certificate_path || !row.private_key_path)) {
+      console.warn(
+        `[ConfigGenerator] Security mode "${row.mode}" requires certificatePath and privateKeyPath. ` +
+        `Falling back to "None" because one or both are missing.`
+      );
       return { mode: 'None' };
     }
 
@@ -105,6 +123,27 @@ export class ConfigGenerator {
 
     if (row.private_key_path) {
       config.privateKeyPath = row.private_key_path;
+    }
+
+    // Include the applicationUri so the runtime can match it to the certificate's SAN
+    if (row.mode !== 'None') {
+      config.applicationUri = 'urn:opcua-light-server:application';
+
+      // Include PKI paths for TOFU certificate verification
+      const pkiTrustedPath = resolve('data/pki/trusted');
+      const pkiRejectedPath = resolve('data/pki/rejected');
+
+      if (!existsSync(pkiTrustedPath) || !existsSync(pkiRejectedPath)) {
+        const missing = !existsSync(pkiTrustedPath) ? 'pkiTrustedPath' : 'pkiRejectedPath';
+        console.warn(
+          `[ConfigGenerator] Security mode "${row.mode}" requires PKI directories but ` +
+          `${missing} does not exist. Falling back to mode "None".`
+        );
+        return { mode: 'None' };
+      }
+
+      config.pkiTrustedPath = pkiTrustedPath;
+      config.pkiRejectedPath = pkiRejectedPath;
     }
 
     return config;

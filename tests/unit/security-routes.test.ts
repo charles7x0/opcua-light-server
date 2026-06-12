@@ -1,8 +1,30 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express, { type Express } from 'express';
 import { Database } from '../../src/db/database.js';
 import { SecurityRepository } from '../../src/db/repositories/security-repository.js';
 import { createSecurityRouter } from '../../src/api/routes/security.js';
+
+// Mock fs module for controlling existsSync in generate tests
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn(actual.existsSync),
+  };
+});
+
+// Mock cert-generator for controlling generateCertificate in generate tests
+vi.mock('../../src/cert-generator/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/cert-generator/index.js')>();
+  return {
+    ...actual,
+    generateCertificate: vi.fn(actual.generateCertificate),
+    readCertificateExpiry: vi.fn(() => null),
+  };
+});
+
+import { existsSync } from 'fs';
+import { generateCertificate, readCertificateExpiry } from '../../src/cert-generator/index.js';
 
 /**
  * Helper to make requests to the Express app without a real HTTP server.
@@ -20,17 +42,17 @@ function createTestApp(securityRepo: SecurityRepository): Express {
  */
 async function request(app: Express, method: string, path: string, body?: unknown): Promise<{ status: number; body: unknown }> {
   return new Promise((resolve) => {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
     const req = {
       method: method.toUpperCase(),
       url: path,
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: body ?? {},
       get(name: string) {
-        return (this.headers as Record<string, string>)[name.toLowerCase()];
+        return headers[name.toLowerCase()];
       },
     } as unknown as express.Request;
 
-    const chunks: Buffer[] = [];
     let statusCode = 200;
 
     const res = {
@@ -52,7 +74,7 @@ async function request(app: Express, method: string, path: string, body?: unknow
     } as unknown as express.Response;
 
     // Use the app's handle method to route the request
-    app.handle(req as any, res as any, () => {
+    (app as any).handle(req as any, res as any, () => {
       resolve({ status: 404, body: { error: 'Not found' } });
     });
   });
@@ -280,6 +302,217 @@ describe('Security API Routes', () => {
       expect(res.status).toBe(400);
       const body = res.body as { error: { code: string } };
       expect(body.error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('POST /api/security/generate', () => {
+    const mockedExistsSync = vi.mocked(existsSync);
+    const mockedGenerateCertificate = vi.mocked(generateCertificate);
+    const mockedReadCertificateExpiry = vi.mocked(readCertificateExpiry);
+
+    beforeEach(() => {
+      // By default: no existing certificate, generation succeeds
+      mockedExistsSync.mockReturnValue(false);
+      mockedGenerateCertificate.mockReturnValue({
+        certificatePath: './data/certs/server.der',
+        privateKeyPath: './data/certs/server.key',
+        expiresAt: '2031-06-09T12:00:00.000Z',
+        createdAt: '2026-06-10T12:00:00.000Z',
+      });
+      mockedReadCertificateExpiry.mockReturnValue({
+        expiresAt: '2031-06-09T12:00:00.000Z',
+        createdAt: '2026-06-10T12:00:00.000Z',
+        remainingDays: 1825,
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // --- Aggregated validation errors ---
+
+    it('should return 400 with all validation errors aggregated in a single response', async () => {
+      const res = await request(app, 'POST', '/api/security/generate', {
+        country: 'invalid',
+        ipAddresses: ['not-an-ip'],
+        dnsNames: ['invalid dns!'],
+      });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; details: Array<{ field: string; message: string }> } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.details).toBeInstanceOf(Array);
+      // Should contain errors for country, ipAddresses, and dnsNames
+      const fields = body.error.details.map((d) => d.field);
+      expect(fields).toContain('country');
+      expect(fields).toContain('ipAddresses');
+      expect(fields).toContain('dnsNames');
+    });
+
+    it('should return 400 with details for a single invalid field', async () => {
+      const res = await request(app, 'POST', '/api/security/generate', {
+        country: 'XYZ',
+      });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; details: Array<{ field: string }> } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.details).toHaveLength(1);
+      expect(body.error.details[0].field).toBe('country');
+    });
+
+    // --- Force flag edge cases ---
+
+    it('should return 400 when force=undefined and certificate exists', async () => {
+      mockedExistsSync.mockReturnValue(true);
+
+      const res = await request(app, 'POST', '/api/security/generate', {});
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.message).toContain('Certificate already exists');
+    });
+
+    it('should return 400 when force="true" (string) and certificate exists', async () => {
+      mockedExistsSync.mockReturnValue(true);
+
+      const res = await request(app, 'POST', '/api/security/generate', {
+        force: 'true',
+      });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.message).toContain('Certificate already exists');
+    });
+
+    it('should return 400 when force=1 (number) and certificate exists', async () => {
+      mockedExistsSync.mockReturnValue(true);
+
+      const res = await request(app, 'POST', '/api/security/generate', {
+        force: 1,
+      });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.message).toContain('Certificate already exists');
+    });
+
+    // --- Certificate existence check with force flag ---
+
+    it('should return 201 when force=true and certificate exists (overwrite allowed)', async () => {
+      mockedExistsSync.mockReturnValue(true);
+
+      const res = await request(app, 'POST', '/api/security/generate', {
+        force: true,
+      });
+
+      expect(res.status).toBe(201);
+      const body = res.body as Record<string, unknown>;
+      expect(body.mode).toBeDefined();
+      expect(body.privateKeyConfigured).toBe(true);
+    });
+
+    it('should return 201 when no certificate exists and force is not set', async () => {
+      mockedExistsSync.mockReturnValue(false);
+
+      const res = await request(app, 'POST', '/api/security/generate', {});
+
+      expect(res.status).toBe(201);
+      const body = res.body as Record<string, unknown>;
+      expect(body.mode).toBeDefined();
+    });
+
+    it('should return 201 when no certificate exists regardless of force=false', async () => {
+      mockedExistsSync.mockReturnValue(false);
+
+      const res = await request(app, 'POST', '/api/security/generate', {
+        force: false,
+      });
+
+      expect(res.status).toBe(201);
+    });
+
+    // --- Successful generation returns 201 with SecurityConfig ---
+
+    it('should return 201 with SecurityConfig including expiry fields on success', async () => {
+      mockedExistsSync.mockReturnValue(false);
+
+      const res = await request(app, 'POST', '/api/security/generate', {
+        commonName: 'Test Server',
+        organization: 'Test Org',
+        country: 'US',
+      });
+
+      expect(res.status).toBe(201);
+      const body = res.body as {
+        mode: string;
+        certificatePath: string;
+        privateKeyConfigured: boolean;
+        certificateExpiresAt?: string;
+        certificateRemainingDays?: number;
+      };
+      expect(body.mode).toBe('None');
+      expect(body.certificatePath).toBe('./data/certs/server.der');
+      expect(body.privateKeyConfigured).toBe(true);
+      expect(body.certificateExpiresAt).toBe('2031-06-09T12:00:00.000Z');
+      expect(body.certificateRemainingDays).toBe(1825);
+    });
+
+    it('should call generateCertificate with trimmed inputs', async () => {
+      mockedExistsSync.mockReturnValue(false);
+
+      await request(app, 'POST', '/api/security/generate', {
+        commonName: '  My Server  ',
+        organization: '  My Org  ',
+        country: '  US  ',
+      });
+
+      expect(mockedGenerateCertificate).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.objectContaining({
+          commonName: 'My Server',
+          organization: 'My Org',
+          country: 'US',
+        })
+      );
+    });
+
+    // --- Filesystem error returns 500 without DB modification ---
+
+    it('should return 500 with INTERNAL_ERROR when generation throws', async () => {
+      mockedExistsSync.mockReturnValue(false);
+      mockedGenerateCertificate.mockImplementation(() => {
+        throw new Error('EACCES: permission denied');
+      });
+
+      const res = await request(app, 'POST', '/api/security/generate', {});
+
+      expect(res.status).toBe(500);
+      const body = res.body as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toContain('permission denied');
+    });
+
+    it('should not modify security_config when generation fails', async () => {
+      mockedExistsSync.mockReturnValue(false);
+      mockedGenerateCertificate.mockImplementation(() => {
+        throw new Error('Disk full');
+      });
+
+      // Record the config before the failed attempt
+      const configBefore = securityRepo.get();
+
+      await request(app, 'POST', '/api/security/generate', {});
+
+      // Config should remain unchanged
+      const configAfter = securityRepo.get();
+      expect(configAfter.certificatePath).toEqual(configBefore.certificatePath);
+      expect(configAfter.privateKeyConfigured).toEqual(configBefore.privateKeyConfigured);
     });
   });
 });

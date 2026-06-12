@@ -8,6 +8,7 @@ import { ProcessManager } from '../process-manager/index.js';
 import { ConfigGenerator } from '../config-generator/index.js';
 import { S7Connector } from '../s7-connector/index.js';
 import { S7Repository } from '../db/repositories/s7-repository.js';
+import { TofuManager } from '../tofu-manager/index.js';
 import { loadAuthConfig } from '../auth/config.js';
 import { createApp } from './app.js';
 import { logService } from '../log/index.js';
@@ -42,6 +43,9 @@ async function main(): Promise<void> {
   const processManager = new ProcessManager(runtimePath, configPath);
   const configGenerator = new ConfigGenerator(database);
   const authConfig = loadAuthConfig();
+
+  // ─── Initialize TOFU Manager ────────────────────────────────────────────────
+  const tofuManager = new TofuManager('data/pki', processManager);
 
   // ─── Initialize S7 Connector ────────────────────────────────────────────────
   const s7Connector = new S7Connector();
@@ -144,11 +148,33 @@ async function main(): Promise<void> {
   });
 
   // ─── Create and Start App ───────────────────────────────────────────────────
-  const app = createApp({ database, processManager, configGenerator, s7Connector, authConfig });
+  const app = createApp({ database, processManager, configGenerator, s7Connector, authConfig, tofuManager });
 
-  const server = app.listen(port, () => {
-    console.log(`Control API listening on port ${port}`);
+  // ─── Start HTTP Server ────────────────────────────────────────────────────
+  // The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt)
+  // applies to the OPC UA runtime's client connections, NOT to the REST API transport.
+  // Using HTTPS for the Control API would break the Vite dev proxy and is unnecessary
+  // since the API is typically accessed on localhost or a trusted local network.
+  let server: import('http').Server;
+
+  server = app.listen(port, () => {
+    console.log(`Control API listening on port ${port} (HTTP)`);
   });
+
+  // ─── Auto-start OPC UA Runtime ──────────────────────────────────────────────
+  try {
+    // Initialize PKI directories before starting runtime (Requirement 1.5)
+    await tofuManager.initialize();
+    console.log('PKI directories initialized.');
+
+    configGenerator.writeToFile(configPath);
+    const result = await processManager.start();
+    s7Connector.start();
+    console.log(`OPC UA Runtime auto-started (PID: ${result.pid})`);
+  } catch (err) {
+    console.error('Failed to auto-start OPC UA Runtime:', (err as Error).message);
+    console.error('Use the Dashboard or POST /server/start to start manually.');
+  }
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────
   const shutdown = async (signal: string): Promise<void> => {
@@ -171,7 +197,7 @@ async function main(): Promise<void> {
 
     // Close the HTTP server
     server.close(() => {
-      console.log('HTTP server closed.');
+      console.log('Server closed.');
 
       // Close the database connection
       database.close();

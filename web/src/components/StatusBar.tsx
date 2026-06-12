@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getServerStatus, getSystemLogs, type ServerStatus, type LogEntry } from '../api';
+import { getServerStatus, getSystemLogs, getSecurityConfig, type ServerStatus, type LogEntry, type SecurityConfig } from '../api';
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -10,6 +10,20 @@ function formatUptime(seconds: number): string {
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
+
+export type CertificateHealthColor = 'green' | 'yellow' | 'red';
+
+export function getCertificateHealthColor(remainingDays: number): CertificateHealthColor {
+  if (remainingDays > 90) return 'green';
+  if (remainingDays >= 30) return 'yellow';
+  return 'red';
+}
+
+const CERT_COLOR_CLASSES: Record<CertificateHealthColor, string> = {
+  green: 'text-green-500',
+  yellow: 'text-yellow-500',
+  red: 'text-red-500',
+};
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
@@ -152,6 +166,13 @@ export function StatusBar() {
     retry: 1,
   });
 
+  const { data: securityConfig } = useQuery<SecurityConfig>({
+    queryKey: ['security'],
+    queryFn: getSecurityConfig,
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
   const backendConnected = !isError && !!status;
   const runtimeState = status?.state ?? 'unknown';
 
@@ -194,6 +215,15 @@ export function StatusBar() {
         {status?.state === 'running' && (
           <div className="flex items-center gap-1.5">
             <span>👥 {status.connectedClients ?? 0} client{(status.connectedClients ?? 0) !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+
+        {/* Certificate days remaining */}
+        {securityConfig?.certificateRemainingDays != null && (
+          <div className="flex items-center gap-1.5">
+            <span className={CERT_COLOR_CLASSES[securityConfig.certificateRemainingDays === 0 ? 'red' : getCertificateHealthColor(securityConfig.certificateRemainingDays)]}>
+              {securityConfig.certificateRemainingDays === 0 ? '🔒 Expired' : `🔒 ${securityConfig.certificateRemainingDays}d`}
+            </span>
           </div>
         )}
 

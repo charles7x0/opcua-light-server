@@ -24,10 +24,13 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 set(UA_ENABLE_AMALGAMATION OFF CACHE BOOL "" FORCE)
-set(UA_ENABLE_ENCRYPTION OFF CACHE BOOL "" FORCE)
+set(UA_ENABLE_ENCRYPTION "OPENSSL" CACHE STRING "" FORCE)
 set(UA_FORCE_WERROR OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(open62541)
+
+# OpenSSL - Required for OPC UA security policies (Sign / SignAndEncrypt)
+find_package(OpenSSL REQUIRED)
 
 # cJSON - Lightweight JSON parser for C
 FetchContent_Declare(
@@ -44,6 +47,7 @@ FetchContent_MakeAvailable(cjson)
 # ─── Source Files ────────────────────────────────────────────────────────────
 set(RUNTIME_SOURCES
     src/main.c
+    src/tofu_verifier.c
 )
 
 # ─── Executable ──────────────────────────────────────────────────────────────
@@ -53,6 +57,8 @@ target_link_libraries(opcua-runtime
     PRIVATE
         open62541::open62541
         cjson
+        OpenSSL::SSL
+        OpenSSL::Crypto
 )
 
 target_include_directories(opcua-runtime

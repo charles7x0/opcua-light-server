@@ -1,0 +1,26 @@
+OPC UA Light Server Runtime
+===========================
+Config file: j:\Projects\opcua-light-server\runtime\config.json
+  Security mode: SignAndEncrypt
+  Certificate loaded from: J:\Projects\opcua-light-server\data\certs\server.der
+  Private key loaded from: J:\Projects\opcua-light-server\data\certs\server.key
+  Private key converted from PEM to DER (1190 bytes)
+[2026-06-10 14:17:49.642 (UTC-0300)] info/securitypolicy	The Basic128Rsa15 security policy with openssl is added.
+[2026-06-10 14:17:49.643 (UTC-0300)] info/securitypolicy	The basic256 security policy with openssl is added.
+[2026-06-10 14:17:49.644 (UTC-0300)] info/securitypolicy	The basic256sha256 security policy with openssl is added.
+[2026-06-10 14:17:49.644 (UTC-0300)] info/securitypolicy	The Aes128Sha256RsaOaep security policy with openssl is added.
+[2026-06-10 14:17:49.645 (UTC-0300)] warn/server	AccessControl: Unconfigured AccessControl. Users have all permissions.
+[2026-06-10 14:17:49.645 (UTC-0300)] info/server	AccessControl: Anonymous login is enabled
+  ApplicationURI: urn:opcua-light-server:application
+  Security policies registered (Basic128Rsa15, Basic256, Basic256Sha256)
+  Removed None endpoints (8 secure endpoint(s) remaining)
+OPC UA server configured
+Status file: j:\Projects\opcua-light-server\runtime\status.json
+Building address space...
+  Registered namespace 'GrupoMoura' (uri: opcua-light:GrupoMoura) at index 2
+Address space built successfully.
+Stdin reader thread started (value updates via pipe)
+Windows handlers registered (Ctrl+C=shutdown, named pipe=reload)
+Starting OPC UA server on port 4840...
+Named pipe listener started: \\.\pipe\opcua-runtime-15976
+[2026-06-10 14:17:49.659 (UTC-0300)] info/network	TCP network layer listening on opc.tcp://N0120160:4840/

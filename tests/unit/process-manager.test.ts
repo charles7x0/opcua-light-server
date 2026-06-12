@@ -31,7 +31,11 @@ function createMockChildProcess(pid: number = 1234): ChildProcess & EventEmitter
   const child = new EventEmitter() as ChildProcess & EventEmitter;
   (child as any).pid = pid;
   (child as any).kill = vi.fn(() => true);
-  (child as any).stdin = new EventEmitter();
+  const stdin = new EventEmitter() as any;
+  stdin.writable = true;
+  stdin.destroyed = false;
+  stdin.write = vi.fn(() => true);
+  (child as any).stdin = stdin;
   (child as any).stdout = new EventEmitter();
   (child as any).stderr = new EventEmitter();
   return child;
@@ -429,6 +433,99 @@ describe('ProcessManager', () => {
 
       const status = pm.getStatus();
       expect(status.connectedClients).toBe(0);
+    });
+  });
+
+  describe('writeToStdin', () => {
+    it('should throw if process is not running', () => {
+      expect(() => pm.writeToStdin('test')).toThrow('Process is not running');
+    });
+
+    it('should write data to stdin when process is running', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      const result = pm.writeToStdin('hello\n');
+
+      expect(mockChild.stdin!.write).toHaveBeenCalledWith('hello\n');
+      expect(result).toBe(true);
+    });
+
+    it('should return false when stdin is destroyed', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      // Simulate stdin being destroyed (e.g., process exiting)
+      (mockChild.stdin as any).destroyed = true;
+
+      const result = pm.writeToStdin('hello\n');
+
+      expect(result).toBe(false);
+      expect(mockChild.stdin!.write).not.toHaveBeenCalled();
+    });
+
+    it('should return false when stdin is not writable', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      // Simulate stdin becoming non-writable
+      (mockChild.stdin as any).writable = false;
+
+      const result = pm.writeToStdin('hello\n');
+
+      expect(result).toBe(false);
+      expect(mockChild.stdin!.write).not.toHaveBeenCalled();
+    });
+
+    it('should throw after process has crashed (state is error)', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      // Simulate crash
+      mockChild.emit('exit', 1, null);
+
+      expect(() => pm.writeToStdin('hello\n')).toThrow('Process is not running');
+    });
+  });
+
+  describe('stdin error handling', () => {
+    it('should not crash the process manager on EPIPE error', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      // Simulate EPIPE error on stdin — this should NOT throw or crash
+      const epipeError = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+      expect(() => {
+        (mockChild.stdin as EventEmitter).emit('error', epipeError);
+      }).not.toThrow();
+
+      // Status should still be running (crash comes from exit event, not stdin error)
+      const status = pm.getStatus();
+      expect(status.state).toBe('running');
+    });
+
+    it('should record lastError for non-EPIPE stdin errors', async () => {
+      const mockChild = createMockChildProcess(5678);
+      vi.mocked(spawn).mockReturnValue(mockChild as any);
+
+      await pm.start();
+
+      // Simulate a non-EPIPE stdin error
+      const otherError = Object.assign(new Error('some stdin error'), { code: 'ECONNRESET' });
+      (mockChild.stdin as EventEmitter).emit('error', otherError);
+
+      const status = pm.getStatus();
+      expect(status.lastError).toBe('stdin error: some stdin error');
     });
   });
 });

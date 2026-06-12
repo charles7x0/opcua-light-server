@@ -3,11 +3,18 @@
  * GET /api/security - Get security config (never expose private key contents)
  * PUT /api/security/policy - Set security mode (None, Sign, SignAndEncrypt)
  * POST /api/security/certificate - Upload certificate (validate format, store paths)
+ * POST /api/security/generate - Generate self-signed certificate and auto-configure
  */
 
 import { Router, Request, Response } from 'express';
+import { resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
 import { SecurityRepository } from '../../db/repositories/security-repository.js';
-import type { ErrorResponse, UpdateSecurityPolicyRequest, UploadCertificateRequest } from '../../types/api.js';
+import { generateCertificate } from '../../cert-generator/index.js';
+import { validateGenerateRequest } from '../../cert-generator/validation.js';
+import { derToPem } from '../../cert-generator/cert-utils.js';
+import type { ErrorResponse, UpdateSecurityPolicyRequest, UploadCertificateRequest, GenerateCertificateRequest } from '../../types/api.js';
+import { networkInterfaces } from 'os';
 
 /**
  * Creates the security router with the given SecurityRepository instance.
@@ -29,6 +36,102 @@ export function createSecurityRouter(securityRepo: SecurityRepository): Router {
         error: {
           code: 'INTERNAL_ERROR',
           message: err instanceof Error ? err.message : 'Failed to retrieve security configuration',
+        },
+      };
+      res.status(500).json(errorResponse);
+    }
+  });
+
+  /**
+   * GET /api/security/certificate/download
+   * Downloads the server's public certificate in DER or PEM format.
+   * The file path is read from the database — no user-supplied paths accepted.
+   */
+  router.get('/certificate/download', (req: Request, res: Response): void => {
+    try {
+      // Validate format query parameter (case-insensitive, default to 'der')
+      const formatParam = (req.query.format as string | undefined)?.toLowerCase() ?? 'der';
+      if (formatParam !== 'der' && formatParam !== 'pem') {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid format. Valid options: der, pem',
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
+      }
+
+      // Retrieve certificate path from database
+      const certPath = securityRepo.getCertificatePath();
+      if (!certPath) {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'CERTIFICATE_NOT_FOUND',
+            message: 'No certificate is available for download',
+          },
+        };
+        res.status(404).json(errorResponse);
+        return;
+      }
+
+      // Reject path traversal sequences
+      const pathTraversalPatterns = ['../', '..\\', '%2e%2e/', '%2e%2e\\'];
+      const certPathLower = certPath.toLowerCase();
+      if (pathTraversalPatterns.some((pattern) => certPathLower.includes(pattern))) {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'ACCESS_DENIED',
+            message: 'Access denied',
+          },
+        };
+        res.status(403).json(errorResponse);
+        return;
+      }
+
+      // Check if file exists
+      if (!existsSync(certPath)) {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'CERTIFICATE_NOT_FOUND',
+            message: 'Certificate file not found at configured path',
+          },
+        };
+        res.status(404).json(errorResponse);
+        return;
+      }
+
+      // Read certificate file
+      let derBuffer: Buffer;
+      try {
+        derBuffer = readFileSync(certPath);
+      } catch {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to read certificate file',
+          },
+        };
+        res.status(500).json(errorResponse);
+        return;
+      }
+
+      // Serve based on format
+      if (formatParam === 'pem') {
+        const pemContent = derToPem(derBuffer);
+        res.setHeader('Content-Type', 'application/x-pem-file');
+        res.setHeader('Content-Disposition', 'attachment; filename="server.pem"');
+        res.send(pemContent);
+      } else {
+        res.setHeader('Content-Type', 'application/x-x509-ca-cert');
+        res.setHeader('Content-Disposition', 'attachment; filename="server.der"');
+        res.send(derBuffer);
+      }
+    } catch (err) {
+      const errorResponse: ErrorResponse = {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Failed to download certificate',
         },
       };
       res.status(500).json(errorResponse);
@@ -175,5 +278,118 @@ export function createSecurityRouter(securityRepo: SecurityRepository): Router {
     }
   });
 
+  /**
+   * POST /api/security/generate
+   * Generates a self-signed certificate and private key, stores them in ./data/certs/,
+   * and auto-configures the security_config table with the new paths.
+   * Requires force=true in body to overwrite existing certificate files.
+   */
+  router.post('/generate', (req: Request, res: Response): void => {
+    try {
+      const body = (req.body ?? {}) as GenerateCertificateRequest;
+
+      // Trim whitespace on all string inputs before validation
+      const trimmedBody: GenerateCertificateRequest = {
+        ...body,
+        commonName: typeof body.commonName === 'string' ? body.commonName.trim() : body.commonName,
+        organization: typeof body.organization === 'string' ? body.organization.trim() : body.organization,
+        country: typeof body.country === 'string' ? body.country.trim() : body.country,
+        dnsNames: Array.isArray(body.dnsNames)
+          ? body.dnsNames.map((d) => (typeof d === 'string' ? d.trim() : d))
+          : body.dnsNames,
+        ipAddresses: Array.isArray(body.ipAddresses)
+          ? body.ipAddresses.map((ip) => (typeof ip === 'string' ? ip.trim() : ip))
+          : body.ipAddresses,
+      };
+
+      // Run input validation and return all errors aggregated
+      const validationErrors = validateGenerateRequest(trimmedBody);
+      if (validationErrors.length > 0) {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Validation failed',
+            details: validationErrors.map((e) => ({ field: e.field, message: e.message })),
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
+      }
+
+      // Handle force field: treat non-boolean values as not set
+      const force = body.force === true;
+
+      // Check certificate existence — reject if exists and force !== true
+      const certPath = resolve('data/certs/server.der');
+      if (existsSync(certPath) && !force) {
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Certificate already exists. Set force=true to overwrite.',
+          },
+        };
+        res.status(400).json(errorResponse);
+        return;
+      }
+
+      // Auto-detect IP addresses from network interfaces when not provided
+      const detectedIps = getLocalIpAddresses();
+      const ipAddresses = trimmedBody.ipAddresses && trimmedBody.ipAddresses.length > 0
+        ? trimmedBody.ipAddresses
+        : detectedIps;
+
+      const dnsNames = trimmedBody.dnsNames ?? [];
+
+      // Generate certificate
+      const certOutputPath = resolve('data/certs/server.der');
+      const keyOutputPath = resolve('data/certs/server.key');
+
+      const result = generateCertificate(certOutputPath, keyOutputPath, {
+        dnsNames,
+        ipAddresses,
+        organization: trimmedBody.organization,
+        country: trimmedBody.country,
+        commonName: trimmedBody.commonName,
+      });
+
+      // Auto-apply: update security_config with the new paths
+      securityRepo.updateCertificate(result.certificatePath, result.privateKeyPath);
+
+      // Return the updated security config (includes expiry info)
+      const config = securityRepo.get();
+      res.status(201).json(config);
+    } catch (err) {
+      // On generation failure, return 500 — security_config table is NOT modified
+      const errorResponse: ErrorResponse = {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: `Certificate generation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        },
+      };
+      res.status(500).json(errorResponse);
+    }
+  });
+
   return router;
+}
+
+/**
+ * Detect local non-loopback IPv4 addresses from network interfaces.
+ * Always includes 127.0.0.1 for localhost access.
+ */
+function getLocalIpAddresses(): string[] {
+  const ips = new Set<string>(['127.0.0.1']);
+
+  const interfaces = networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const addrs = interfaces[name];
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        ips.add(addr.address);
+      }
+    }
+  }
+
+  return Array.from(ips);
 }

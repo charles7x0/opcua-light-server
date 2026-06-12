@@ -16,6 +16,7 @@ export class ProcessManager {
   private connectedClients = 0;
   private stopping = false;
   private crashHandlers: Array<(reason: string) => void> = [];
+  private stderrBuffer = '';
 
   /**
    * @param executablePath - Path to the compiled open62541 runtime binary.
@@ -37,6 +38,7 @@ export class ProcessManager {
 
     this.stopping = false;
     this.lastError = undefined;
+    this.stderrBuffer = '';
 
     const child = spawn(this.executablePath, [this.configFilePath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -174,18 +176,19 @@ export class ProcessManager {
   /**
    * Write data to the runtime process's stdin pipe.
    * Used by the S7 Connector to send value updates to the runtime.
-   * Throws if the process is not running or stdin is not writable.
+   * Returns true if the write was accepted, false if the pipe is unavailable.
+   * Throws if the process is not running.
    */
-  writeToStdin(data: string): void {
+  writeToStdin(data: string): boolean {
     if (this.state !== 'running' || !this.process) {
       throw new Error('Process is not running');
     }
 
-    if (!this.process.stdin || !this.process.stdin.writable) {
-      throw new Error('Process stdin is not writable');
+    if (!this.process.stdin || this.process.stdin.destroyed || !this.process.stdin.writable) {
+      return false;
     }
 
-    this.process.stdin.write(data);
+    return this.process.stdin.write(data);
   }
 
   /**
@@ -195,9 +198,14 @@ export class ProcessManager {
     child.on('exit', (code, signal) => {
       if (!this.stopping) {
         // Unexpected exit — this is a crash
-        const reason = signal
+        let reason = signal
           ? `Process killed by signal: ${signal}`
           : `Process exited with code: ${code}`;
+
+        // Append stderr output if available for better diagnostics
+        if (this.stderrBuffer.trim()) {
+          reason += `\nstderr: ${this.stderrBuffer.trim()}`;
+        }
 
         this.state = 'error';
         this.lastError = reason;
@@ -230,10 +238,32 @@ export class ProcessManager {
       }
     });
 
+    // Absorb write errors on stdin (EPIPE when runtime has exited).
+    // Without this handler, the 'error' event would be unhandled and crash Node.
+    if (child.stdin) {
+      child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+        // EPIPE is expected when the runtime process exits while we still
+        // have a reference — it's handled via the 'exit' listener above.
+        if (err.code !== 'EPIPE') {
+          this.lastError = `stdin error: ${err.message}`;
+        }
+      });
+    }
+
     // Parse stdout for potential client connection info
     if (child.stdout) {
       child.stdout.on('data', (data: Buffer) => {
         this.parseStdout(data.toString());
+      });
+    }
+
+    // Capture stderr so crash diagnostics are visible in the crash reason
+    if (child.stderr) {
+      child.stderr.on('data', (data: Buffer) => {
+        const text = data.toString().trim();
+        if (text) {
+          this.stderrBuffer += text + '\n';
+        }
       });
     }
   }
@@ -276,5 +306,6 @@ export class ProcessManager {
     this.startedAt = null;
     this.connectedClients = 0;
     this.stopping = false;
+    this.stderrBuffer = '';
   }
 }

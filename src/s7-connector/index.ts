@@ -273,6 +273,13 @@ export class S7Connector {
         return;
       }
 
+      // Guard: client may have been nullified by disconnectAndCleanup during
+      // the async connection handshake (race condition with stop/reconnect).
+      if (!managed.client) {
+        this.log('warn', managed.config.name, 'Connection succeeded but client was already cleaned up — ignoring');
+        return;
+      }
+
       // Connection successful
       managed.state = 'connected';
       managed.errorMessage = undefined;

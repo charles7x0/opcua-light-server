@@ -28,8 +28,11 @@
 #include <open62541/server.h>
 #include <open62541/server_config_default.h>
 #include <open62541/plugin/log_stdout.h>
+#include <open62541/plugin/securitypolicy.h>
 
 #include <cJSON.h>
+
+#include "tofu_verifier.h"
 
 /* ─── Global State ─────────────────────────────────────────────────────────── */
 
@@ -38,6 +41,7 @@ static volatile UA_Boolean g_running = UA_TRUE;
 static UA_Server *g_server = NULL;
 static char g_config_path[4096] = {0};
 static char g_status_path[4096] = {0};
+static TofuVerifierContext g_tofu_ctx;
 
 /* ─── Status File ──────────────────────────────────────────────────────────── */
 
@@ -199,6 +203,51 @@ static char *read_file(const char *path) {
 
     buffer[read_count] = '\0';
     return buffer;
+}
+
+/**
+ * Read a binary file into a UA_ByteString.
+ * Unlike read_file(), this is safe for DER-encoded certificates and keys.
+ */
+static UA_ByteString read_file_binary(const char *path) {
+    UA_ByteString data = UA_BYTESTRING_NULL;
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "Error: Cannot open file '%s'\n", path);
+        return data;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (length <= 0) {
+        fclose(f);
+        fprintf(stderr, "Error: File '%s' is empty or unreadable\n", path);
+        return data;
+    }
+
+    data.length = (size_t)length;
+    data.data = (UA_Byte *)UA_malloc(data.length);
+    if (!data.data) {
+        fclose(f);
+        data.length = 0;
+        fprintf(stderr, "Error: Memory allocation failed for '%s'\n", path);
+        return data;
+    }
+
+    size_t read_count = fread(data.data, 1, data.length, f);
+    fclose(f);
+
+    if (read_count != data.length) {
+        UA_free(data.data);
+        data.data = NULL;
+        data.length = 0;
+        fprintf(stderr, "Error: Incomplete read of '%s'\n", path);
+    }
+
+    return data;
 }
 
 /* ─── JSON Config Parsing ──────────────────────────────────────────────────── */
@@ -537,9 +586,26 @@ static int build_address_space(UA_Server *server, cJSON *config) {
 
 /* ─── Security Configuration ───────────────────────────────────────────────── */
 
+/**
+ * Configure security on the OPC UA server.
+ *
+ * When mode is "Sign" or "SignAndEncrypt":
+ *   - Loads the DER-encoded certificate and private key
+ *   - Calls UA_ServerConfig_setDefaultWithSecurityPolicies() to register
+ *     Basic128Rsa15, Basic256, and Basic256Sha256 security policies
+ *   - For "SignAndEncrypt", removes the None endpoint so clients MUST use encryption
+ *
+ * When mode is "None" (or missing):
+ *   - Uses the default configuration (SecurityPolicy#None only)
+ *
+ * Returns 0 on success, -1 on failure.
+ * Must be called BEFORE UA_ServerConfig_setDefault() — this function
+ * replaces the default config call entirely.
+ */
 static int configure_security(UA_Server *server, cJSON *security) {
     if (!security || !cJSON_IsObject(security)) {
         printf("  No security configuration, using defaults (SecurityMode: None)\n");
+        UA_ServerConfig_setDefault(UA_Server_getConfig(server));
         return 0;
     }
 
@@ -553,6 +619,7 @@ static int configure_security(UA_Server *server, cJSON *security) {
 
     if (!mode || strcmp(mode, "None") == 0) {
         printf("  Security mode: None\n");
+        UA_ServerConfig_setDefault(UA_Server_getConfig(server));
         return 0;
     }
 
@@ -564,35 +631,220 @@ static int configure_security(UA_Server *server, cJSON *security) {
         return -1;
     }
 
-    /* Read certificate file */
-    char *cert_data = read_file(cert_path);
-    if (!cert_data) {
+    /* Read certificate file (DER format) */
+    UA_ByteString certificate = read_file_binary(cert_path);
+    if (certificate.data == NULL) {
         fprintf(stderr, "Error: Cannot read certificate file '%s'\n", cert_path);
         return -1;
     }
 
-    /* Read private key file */
-    char *key_data = read_file(key_path);
-    if (!key_data) {
+    /* Read private key file (DER format) */
+    UA_ByteString privateKey = read_file_binary(key_path);
+    if (privateKey.data == NULL) {
         fprintf(stderr, "Error: Cannot read private key file '%s'\n", key_path);
-        free(cert_data);
+        UA_ByteString_clear(&certificate);
         return -1;
     }
 
     printf("  Certificate loaded from: %s\n", cert_path);
     printf("  Private key loaded from: %s\n", key_path);
 
-    /*
-     * Note: In a full production implementation, we would call
-     * UA_ServerConfig_setDefaultWithSecurityPolicies() or similar
-     * open62541 security APIs here. For the MVP, we validate that
-     * the files exist and are readable. The actual security policy
-     * application depends on the open62541 version and build options.
-     */
-    (void)server;
+    /* If the private key is in PEM format, convert it to DER.
+     * open62541 expects DER-encoded keys. Our cert generator produces PEM. */
+    if (privateKey.length > 10 &&
+        memcmp(privateKey.data, "-----BEGIN", 10) == 0) {
+        /* PEM detected — strip the header/footer and base64 decode */
+        /* Find the first newline after the header */
+        UA_Byte *start = NULL;
+        UA_Byte *end = NULL;
+        for (size_t i = 0; i < privateKey.length - 1; i++) {
+            if (privateKey.data[i] == '\n' && !start) {
+                start = &privateKey.data[i + 1];
+            }
+            /* Find "-----END" */
+            if (privateKey.data[i] == '-' && i + 4 < privateKey.length &&
+                memcmp(&privateKey.data[i], "-----END", 8) == 0) {
+                end = &privateKey.data[i];
+                break;
+            }
+        }
 
-    free(cert_data);
-    free(key_data);
+        if (start && end && end > start) {
+            /* Remove newlines and carriage returns from the base64 content */
+            size_t b64_len = 0;
+            UA_Byte *b64_buf = (UA_Byte *)UA_malloc((size_t)(end - start));
+            if (!b64_buf) {
+                fprintf(stderr, "Error: Memory allocation failed for PEM decode\n");
+                UA_ByteString_clear(&certificate);
+                UA_ByteString_clear(&privateKey);
+                return -1;
+            }
+            for (UA_Byte *p = start; p < end; p++) {
+                if (*p != '\n' && *p != '\r') {
+                    b64_buf[b64_len++] = *p;
+                }
+            }
+
+            /* Base64 decode */
+            /* Calculate decoded size (base64: 4 chars = 3 bytes) */
+            size_t decoded_max = (b64_len / 4) * 3 + 3;
+            UA_Byte *decoded = (UA_Byte *)UA_malloc(decoded_max);
+            if (!decoded) {
+                UA_free(b64_buf);
+                UA_ByteString_clear(&certificate);
+                UA_ByteString_clear(&privateKey);
+                return -1;
+            }
+
+            /* Simple base64 decode */
+            static const unsigned char b64_table[256] = {
+                ['A'] = 0,  ['B'] = 1,  ['C'] = 2,  ['D'] = 3,
+                ['E'] = 4,  ['F'] = 5,  ['G'] = 6,  ['H'] = 7,
+                ['I'] = 8,  ['J'] = 9,  ['K'] = 10, ['L'] = 11,
+                ['M'] = 12, ['N'] = 13, ['O'] = 14, ['P'] = 15,
+                ['Q'] = 16, ['R'] = 17, ['S'] = 18, ['T'] = 19,
+                ['U'] = 20, ['V'] = 21, ['W'] = 22, ['X'] = 23,
+                ['Y'] = 24, ['Z'] = 25, ['a'] = 26, ['b'] = 27,
+                ['c'] = 28, ['d'] = 29, ['e'] = 30, ['f'] = 31,
+                ['g'] = 32, ['h'] = 33, ['i'] = 34, ['j'] = 35,
+                ['k'] = 36, ['l'] = 37, ['m'] = 38, ['n'] = 39,
+                ['o'] = 40, ['p'] = 41, ['q'] = 42, ['r'] = 43,
+                ['s'] = 44, ['t'] = 45, ['u'] = 46, ['v'] = 47,
+                ['w'] = 48, ['x'] = 49, ['y'] = 50, ['z'] = 51,
+                ['0'] = 52, ['1'] = 53, ['2'] = 54, ['3'] = 55,
+                ['4'] = 56, ['5'] = 57, ['6'] = 58, ['7'] = 59,
+                ['8'] = 60, ['9'] = 61, ['+'] = 62, ['/'] = 63,
+            };
+
+            size_t decoded_len = 0;
+            for (size_t i = 0; i + 3 < b64_len; i += 4) {
+                unsigned int n = ((unsigned int)b64_table[b64_buf[i]] << 18) |
+                                 ((unsigned int)b64_table[b64_buf[i+1]] << 12) |
+                                 ((unsigned int)b64_table[b64_buf[i+2]] << 6) |
+                                 ((unsigned int)b64_table[b64_buf[i+3]]);
+                decoded[decoded_len++] = (UA_Byte)((n >> 16) & 0xFF);
+                if (b64_buf[i+2] != '=')
+                    decoded[decoded_len++] = (UA_Byte)((n >> 8) & 0xFF);
+                if (b64_buf[i+3] != '=')
+                    decoded[decoded_len++] = (UA_Byte)(n & 0xFF);
+            }
+
+            UA_free(b64_buf);
+
+            /* Replace the PEM privateKey with the DER-decoded content */
+            UA_ByteString_clear(&privateKey);
+            privateKey.data = decoded;
+            privateKey.length = decoded_len;
+            printf("  Private key converted from PEM to DER (%zu bytes)\n", decoded_len);
+        }
+    }
+
+    /* Configure the server with all available security policies.
+     * This registers Basic128Rsa15, Basic256, Basic256Sha256 AND None. */
+    UA_StatusCode retval = UA_ServerConfig_setDefaultWithSecurityPolicies(
+        UA_Server_getConfig(server),
+        4840,         /* port */
+        &certificate,
+        &privateKey,
+        NULL, 0,      /* trust list (empty — accept all client certs) */
+        NULL, 0,      /* issuer list */
+        NULL, 0       /* revocation list */
+    );
+
+    UA_ByteString_clear(&certificate);
+    UA_ByteString_clear(&privateKey);
+
+    if (retval != UA_STATUSCODE_GOOD) {
+        fprintf(stderr, "Error: Failed to configure security policies: %s\n",
+                UA_StatusCode_name(retval));
+        return -1;
+    }
+
+    /* Set the ApplicationURI to match the certificate's SubjectAltName URI.
+     * open62541 validates that these match on startup. We extract it from the
+     * config JSON if provided, otherwise use a sensible default. */
+    {
+        UA_ServerConfig *cfg = UA_Server_getConfig(server);
+        cJSON *app_uri_item = cJSON_GetObjectItemCaseSensitive(security, "applicationUri");
+        const char *app_uri = cJSON_GetStringValue(app_uri_item);
+        if (!app_uri) {
+            app_uri = "urn:opcua-light-server:application";
+        }
+        UA_String_clear(&cfg->applicationDescription.applicationUri);
+        cfg->applicationDescription.applicationUri = UA_STRING_ALLOC(app_uri);
+        UA_String_clear(&cfg->applicationDescription.applicationName.text);
+        cfg->applicationDescription.applicationName.text = UA_STRING_ALLOC("OPC UA Light Server");
+        printf("  ApplicationURI: %s\n", app_uri);
+    }
+
+    printf("  Security policies registered (Basic128Rsa15, Basic256, Basic256Sha256)\n");
+
+    /* Register TOFU certificate verifier if PKI paths are configured */
+    {
+        cJSON *pki_trusted_item = cJSON_GetObjectItemCaseSensitive(security, "pkiTrustedPath");
+        cJSON *pki_rejected_item = cJSON_GetObjectItemCaseSensitive(security, "pkiRejectedPath");
+        const char *pki_trusted_str = cJSON_GetStringValue(pki_trusted_item);
+        const char *pki_rejected_str = cJSON_GetStringValue(pki_rejected_item);
+
+        if (pki_trusted_str && pki_trusted_str[0] != '\0' &&
+            pki_rejected_str && pki_rejected_str[0] != '\0') {
+            /* Initialize the TOFU verifier context with configured paths */
+            memset(&g_tofu_ctx, 0, sizeof(g_tofu_ctx));
+            strncpy(g_tofu_ctx.trusted_path, pki_trusted_str, sizeof(g_tofu_ctx.trusted_path) - 1);
+            strncpy(g_tofu_ctx.rejected_path, pki_rejected_str, sizeof(g_tofu_ctx.rejected_path) - 1);
+
+            /* Replace the default AcceptAll verifier with TOFU verifier */
+            UA_ServerConfig *cfg = UA_Server_getConfig(server);
+            cfg->certificateVerification.context = &g_tofu_ctx;
+            cfg->certificateVerification.verifyCertificate = tofu_verify_certificate;
+            cfg->certificateVerification.verifyApplicationURI = NULL;
+            cfg->certificateVerification.clear = NULL;
+
+            printf("  TOFU certificate verifier registered\n");
+            printf("    Trusted path: %s\n", pki_trusted_str);
+            printf("    Rejected path: %s\n", pki_rejected_str);
+        } else {
+            printf("  PKI paths not configured, using default certificate verification\n");
+        }
+    }
+
+    /* For "SignAndEncrypt" mode, remove the None endpoint so clients
+     * are FORCED to use encryption. For "Sign" mode, keep None available
+     * but Sign/SignAndEncrypt endpoints are also available. */
+    if (strcmp(mode, "SignAndEncrypt") == 0) {
+        UA_ServerConfig *config = UA_Server_getConfig(server);
+        /* Remove endpoints with SecurityMode == None */
+        size_t new_count = 0;
+        for (size_t i = 0; i < config->endpointsSize; i++) {
+            if (config->endpoints[i].securityMode != UA_MESSAGESECURITYMODE_NONE) {
+                if (new_count != i) {
+                    config->endpoints[new_count] = config->endpoints[i];
+                }
+                new_count++;
+            } else {
+                UA_EndpointDescription_clear(&config->endpoints[i]);
+            }
+        }
+        config->endpointsSize = new_count;
+        printf("  Removed None endpoints (%zu secure endpoint(s) remaining)\n", new_count);
+    } else if (strcmp(mode, "Sign") == 0) {
+        /* For Sign mode, remove SignAndEncrypt endpoints but keep Sign and None.
+         * This allows clients to connect with at least message signing. */
+        UA_ServerConfig *config = UA_Server_getConfig(server);
+        size_t new_count = 0;
+        for (size_t i = 0; i < config->endpointsSize; i++) {
+            if (config->endpoints[i].securityMode != UA_MESSAGESECURITYMODE_SIGNANDENCRYPT) {
+                if (new_count != i) {
+                    config->endpoints[new_count] = config->endpoints[i];
+                }
+                new_count++;
+            } else {
+                UA_EndpointDescription_clear(&config->endpoints[i]);
+            }
+        }
+        config->endpointsSize = new_count;
+        printf("  Removed SignAndEncrypt endpoints (%zu endpoint(s) remaining)\n", new_count);
+    }
 
     return 0;
 }
@@ -887,7 +1139,22 @@ static void apply_value_update(UA_Server *server, const char *json_line) {
     if (!root) return;
 
     cJSON *type_item = cJSON_GetObjectItemCaseSensitive(root, "type");
-    if (!type_item || strcmp(cJSON_GetStringValue(type_item), "value_update") != 0) {
+    const char *type_str = cJSON_GetStringValue(type_item);
+    if (!type_str) {
+        cJSON_Delete(root);
+        return;
+    }
+
+    /* Handle trust_store_reload IPC message */
+    if (strcmp(type_str, "trust_store_reload") == 0) {
+        printf("[TOFU] Trust store reload requested via IPC\n");
+        /* No-op if using direct filesystem checks per connection.
+         * If caching is added, refresh the cache here. */
+        cJSON_Delete(root);
+        return;
+    }
+
+    if (strcmp(type_str, "value_update") != 0) {
         cJSON_Delete(root);
         return;
     }
@@ -991,8 +1258,15 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    UA_ServerConfig_setDefault(UA_Server_getConfig(g_server));
-    printf("OPC UA server created with default configuration\n");
+    /* 3. Configure security settings (this also sets the default server config) */
+    cJSON *security = cJSON_GetObjectItemCaseSensitive(config, "security");
+    if (configure_security(g_server, security) != 0) {
+        fprintf(stderr, "Error: Security configuration failed\n");
+        UA_Server_delete(g_server);
+        cJSON_Delete(config);
+        return EXIT_FAILURE;
+    }
+    printf("OPC UA server configured\n");
 
     /* Derive status file path from config path (same directory) */
     {
@@ -1009,15 +1283,6 @@ int main(int argc, char *argv[]) {
             strcpy(g_status_path, "status.json");
         }
         printf("Status file: %s\n", g_status_path);
-    }
-
-    /* 3. Configure security settings */
-    cJSON *security = cJSON_GetObjectItemCaseSensitive(config, "security");
-    if (configure_security(g_server, security) != 0) {
-        fprintf(stderr, "Error: Security configuration failed\n");
-        UA_Server_delete(g_server);
-        cJSON_Delete(config);
-        return EXIT_FAILURE;
     }
 
     /* 4. Build address space from configuration */

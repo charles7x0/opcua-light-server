@@ -55,8 +55,13 @@ export interface ObjectNode {
 export interface SecurityConfig {
   mode: 'None' | 'Sign' | 'SignAndEncrypt';
   certificatePath?: string;
+  /** Whether the configured certificate is valid (file exists, parseable, and not expired). Undefined when no certificate is configured. */
   certificateValid?: boolean;
   privateKeyConfigured: boolean;
+  /** Certificate expiry date as ISO string (if certificate is configured) */
+  certificateExpiresAt?: string;
+  /** Remaining days until certificate expiry (if certificate is configured) */
+  certificateRemainingDays?: number;
 }
 
 /** Runtime server status. */

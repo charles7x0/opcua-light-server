@@ -177,6 +177,17 @@ export interface SecurityConfig {
   certificatePath?: string;
   certificateValid?: boolean;
   privateKeyConfigured: boolean;
+  certificateExpiresAt?: string;
+  certificateRemainingDays?: number;
+}
+
+export interface GenerateCertificateOptions {
+  dnsNames?: string[];
+  ipAddresses?: string[];
+  organization?: string;
+  country?: string;
+  commonName?: string;
+  force?: boolean;
 }
 
 export function getSecurityConfig(): Promise<SecurityConfig> {
@@ -191,6 +202,28 @@ export function uploadCertificate(certificatePath: string, privateKeyPath: strin
   return request<SecurityConfig>('/security/certificate', {
     method: 'POST',
     body: JSON.stringify({ certificatePath, privateKeyPath }),
+  });
+}
+
+export function generateCertificate(options: GenerateCertificateOptions = {}): Promise<SecurityConfig> {
+  return request<SecurityConfig>('/security/generate', {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+}
+
+export function getCertificateDownloadUrl(format?: 'der' | 'pem'): string {
+  const base = `${BASE_URL}/security/certificate/download`;
+  if (format === 'pem') {
+    return `${base}?format=pem`;
+  }
+  return base;
+}
+
+export function browseFiles(options?: { startPath?: string; extensions?: string[] }): Promise<{ selectedPath: string | null }> {
+  return request<{ selectedPath: string | null }>('/files/browse', {
+    method: 'POST',
+    body: JSON.stringify(options ?? {}),
   });
 }
 
@@ -316,4 +349,33 @@ export function getSystemLogs(options?: { since?: string; level?: string; source
   if (options?.source) params.set('source', options.source);
   const qs = params.toString();
   return request<LogEntry[]>(`/logs${qs ? `?${qs}` : ''}`);
+}
+
+
+// ─── PKI Certificates ─────────────────────────────────────────────────────────
+
+export interface PkiCertificate {
+  thumbprint: string;
+  status: 'trusted' | 'rejected';
+  subject: string;
+  issuer: string;
+  notBefore: string;
+  notAfter: string;
+  fileSize: number;
+}
+
+export function getPkiCertificates(): Promise<PkiCertificate[]> {
+  return request<PkiCertificate[]>('/pki/certificates');
+}
+
+export function rejectPkiCertificate(thumbprint: string): Promise<void> {
+  return request<void>(`/pki/certificates/${thumbprint}/reject`, { method: 'POST' });
+}
+
+export function trustPkiCertificate(thumbprint: string): Promise<void> {
+  return request<void>(`/pki/certificates/${thumbprint}/trust`, { method: 'POST' });
+}
+
+export function deletePkiCertificate(thumbprint: string): Promise<void> {
+  return request<void>(`/pki/certificates/${thumbprint}`, { method: 'DELETE' });
 }

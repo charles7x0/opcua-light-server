@@ -7,6 +7,7 @@
 - **Framework**: Express 4
 - **Database**: better-sqlite3 (SQLite)
 - **Auth**: jsonwebtoken (JWT) + API key support
+- **Crypto**: node-forge (certificate generation, DER/PEM parsing)
 - **S7 PLC**: nodes7 library
 - **Build**: `tsc` (plain TypeScript compiler)
 - **Dev**: tsx (watch mode)
@@ -72,3 +73,23 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 | `JWT_SECRET` | — | JWT verification secret |
 | `DB_PATH` | `./data/opcua-light.db` | SQLite database path |
 | `RUNTIME_PATH` | `./runtime/opcua-runtime` | Path to compiled open62541 binary |
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/server/status` | Server status (unauthenticated) |
+| POST | `/api/server/start` | Start OPC UA runtime |
+| POST | `/api/server/stop` | Stop OPC UA runtime |
+| POST | `/api/server/reload` | Hot-reload address space |
+| GET | `/api/security` | Get security config |
+| PUT | `/api/security/policy` | Update security mode |
+| POST | `/api/security/certificate` | Upload certificate paths |
+| POST | `/api/security/generate` | Generate self-signed certificate |
+| GET | `/api/security/certificate/download` | Download certificate (DER/PEM) |
+| POST | `/api/files/browse` | Server-side file browser |
+| GET | `/api/nodes` | List nodes |
+| POST | `/api/nodes` | Create node |
+| GET | `/api/namespaces` | List namespaces |
+| GET | `/api/logs` | System log entries |
+| GET/POST/PUT/DELETE | `/api/s7/*` | S7 PLC connections and mappings |

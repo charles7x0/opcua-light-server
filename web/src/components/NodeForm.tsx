@@ -185,13 +185,13 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4" aria-busy={isSubmitting}>
       <h2 className="text-lg font-semibold text-gray-900">
         {isEdit ? 'Edit Node' : 'Create Node'}
       </h2>
 
       {generalError && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
           {generalError}
         </div>
       )}
@@ -199,13 +199,17 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
       {/* Name field */}
       <div>
         <label htmlFor="node-name" className="block text-sm font-medium text-gray-700">
-          Name <span className="text-red-500">*</span>
+          Name <span aria-hidden="true" className="text-red-500">*</span>
         </label>
         <input
           id="node-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          required
+          aria-required="true"
+          aria-invalid={!!fieldErrors.name}
+          aria-describedby={fieldErrors.name ? 'node-name-error' : undefined}
           className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
             fieldErrors.name
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
@@ -214,19 +218,23 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           placeholder="e.g., Temperature.Sensor1"
         />
         {fieldErrors.name && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>
+          <p id="node-name-error" className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>
         )}
       </div>
 
       {/* Data Type field */}
       <div>
         <label htmlFor="node-dataType" className="block text-sm font-medium text-gray-700">
-          Data Type <span className="text-red-500">*</span>
+          Data Type <span aria-hidden="true" className="text-red-500">*</span>
         </label>
         <select
           id="node-dataType"
           value={dataType}
           onChange={(e) => setDataType(e.target.value)}
+          required
+          aria-required="true"
+          aria-invalid={!!fieldErrors.dataType}
+          aria-describedby={fieldErrors.dataType ? 'node-dataType-error' : undefined}
           className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
             fieldErrors.dataType
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
@@ -240,14 +248,14 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           ))}
         </select>
         {fieldErrors.dataType && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.dataType}</p>
+          <p id="node-dataType-error" className="mt-1 text-sm text-red-600">{fieldErrors.dataType}</p>
         )}
       </div>
 
       {/* Namespace field */}
       <div>
         <label htmlFor="node-namespace" className="block text-sm font-medium text-gray-700">
-          Namespace <span className="text-red-500">*</span>
+          Namespace <span aria-hidden="true" className="text-red-500">*</span>
         </label>
         <select
           id="node-namespace"
@@ -257,6 +265,10 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
             setObjectNodeId('');
           }}
           disabled={isEdit}
+          required
+          aria-required="true"
+          aria-invalid={!!fieldErrors.namespaceId}
+          aria-describedby={fieldErrors.namespaceId ? 'node-namespace-error' : undefined}
           className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
             fieldErrors.namespaceId
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
@@ -271,7 +283,7 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           ))}
         </select>
         {fieldErrors.namespaceId && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.namespaceId}</p>
+          <p id="node-namespace-error" className="mt-1 text-sm text-red-600">{fieldErrors.namespaceId}</p>
         )}
       </div>
 
@@ -284,6 +296,7 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           id="node-object-node"
           value={objectNodeId}
           onChange={(e) => setObjectNodeId(e.target.value)}
+          aria-describedby={fieldErrors.objectNodeId ? 'node-object-node-error' : undefined}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="">(Root)</option>
@@ -294,7 +307,7 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           ))}
         </select>
         {fieldErrors.objectNodeId && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.objectNodeId}</p>
+          <p id="node-object-node-error" className="mt-1 text-sm text-red-600">{fieldErrors.objectNodeId}</p>
         )}
       </div>
 
@@ -308,11 +321,12 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           type="text"
           value={initialValue}
           onChange={(e) => setInitialValue(e.target.value)}
+          aria-describedby={fieldErrors.initialValue ? 'node-initialValue-error' : undefined}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           placeholder="e.g., 0, true, hello"
         />
         {fieldErrors.initialValue && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.initialValue}</p>
+          <p id="node-initialValue-error" className="mt-1 text-sm text-red-600">{fieldErrors.initialValue}</p>
         )}
       </div>
 
@@ -326,21 +340,26 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
+          aria-describedby={fieldErrors.description ? 'node-description-error' : undefined}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           placeholder="Optional description for this node"
         />
         {fieldErrors.description && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
+          <p id="node-description-error" className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
         )}
       </div>
 
       {/* S7 PLC link */}
       {!isEdit && (
         <p className="text-xs text-gray-500">
-          💡 Want to map this variable to a PLC address?{' '}
-          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('navigate', { detail: 's7' })); }} className="text-blue-600 hover:text-blue-800 underline">
+          <span aria-hidden="true">💡</span> Want to map this variable to a PLC address?{' '}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 's7' }))}
+            className="text-blue-600 hover:text-blue-800 underline text-xs bg-transparent border-none cursor-pointer p-0"
+          >
             Connect to S7 PLC variable
-          </a>
+          </button>
           {' '}after creating the node.
         </p>
       )}

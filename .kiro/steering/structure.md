@@ -4,27 +4,33 @@
 opcua-light-server/
 ├── src/                          # Control API source (TypeScript, ES modules)
 │   ├── api/                      # Express app and route handlers
-│   │   ├── routes/               # Route modules (nodes, namespaces, folders, server, security, s7)
+│   │   ├── routes/               # Route modules (nodes, namespaces, object-nodes, server, security, s7, files)
 │   │   ├── app.ts                # Express app assembly
-│   │   └── server.ts             # Entry point
+│   │   ├── server.ts             # Entry point
+│   │   └── https-server.ts       # HTTPS utilities (unused — Control API is HTTP-only)
 │   ├── auth/                     # Authentication middleware and config
+│   ├── cert-generator/           # Certificate generation and DER/PEM conversion utilities
+│   │   ├── index.ts              # Self-signed cert generation, expiry reading
+│   │   └── cert-utils.ts         # Pure DER↔PEM conversion functions
 │   ├── config-generator/         # Generates JSON config consumed by the C runtime
 │   ├── db/                       # SQLite schema, Database class, repositories
 │   │   └── repositories/         # Data access layer (one per domain entity)
-│   ├── log/                      # Logging utilities
+│   ├── log/                      # Logging utilities (in-memory log service)
 │   ├── process-manager/          # Manages the open62541 child process lifecycle
-│   ├── s7-connector/             # S7 PLC polling and value update logic
+│   ├── s7-connector/             # S7 PLC polling, reconnection, and value update logic
 │   └── types/                    # Domain types, DTOs, and declaration files
 ├── web/                          # React web UI (separate npm package)
 │   └── src/
-│       ├── components/           # React components (Dashboard, NodeForm, etc.)
+│       ├── components/           # React components (Dashboard, SecuritySettings, StatusBar, etc.)
 │       ├── hooks/                # Custom React hooks
-│       ├── api.ts                # API client
+│       ├── api.ts                # API client (typed fetch wrapper)
 │       └── App.tsx               # Root component
 ├── runtime/                      # open62541 C runtime
 │   ├── src/main.c                # Runtime entry point
 │   ├── CMakeLists.txt            # CMake build config
 │   └── build/                    # CMake build output (gitignored)
+├── data/                         # Runtime data directory
+│   └── certs/                    # Generated certificates (server.der, server.key)
 ├── tests/                        # All tests (separate from src)
 │   ├── unit/                     # Unit tests (repositories, routes, middleware)
 │   ├── property/                 # Property-based tests (fast-check)
@@ -45,3 +51,5 @@ opcua-light-server/
 - **Repositories** follow a one-per-entity pattern in `src/db/repositories/`.
 - **Routes** are modular, one file per resource in `src/api/routes/`.
 - **Types** are centralized in `src/types/` (domain types, API DTOs, third-party declarations).
+- **Certificate utilities** are pure functions in `src/cert-generator/cert-utils.ts` (no side effects, easily testable).
+- **The Control API always uses HTTP** — OPC UA security mode does not affect the REST API transport.

@@ -78,6 +78,7 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
   const [bulkText, setBulkText] = useState('');
   const [bulkError, setBulkError] = useState('');
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Editable rows state: one entry per existing mapping + new blank rows
@@ -94,12 +95,17 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
 
   // Sync rows from props when mappings change
   useEffect(() => {
-    const mapped: EditableRow[] = mappings.map((m) => ({
-      id: m.id, plcAddress: m.plcAddress, description: m.description ?? '', nodeId: m.nodeId, dirty: false,
-    }));
-    // Keep any new blank rows that have content
-    const newRows = rows.filter((r) => r.id === null && (r.plcAddress || r.nodeId));
-    setRows([...mapped, ...newRows]);
+    setRows((prev) => {
+      const mapped: EditableRow[] = mappings.map((m) => {
+        // Preserve local edits for dirty rows
+        const existing = prev.find((r) => r.id === m.id);
+        if (existing?.dirty) return existing;
+        return { id: m.id, plcAddress: m.plcAddress, description: m.description ?? '', nodeId: m.nodeId, dirty: false };
+      });
+      // Keep any new blank rows that have content
+      const newRows = prev.filter((r) => r.id === null && (r.plcAddress || r.nodeId));
+      return [...mapped, ...newRows];
+    });
     setInitialized(true);
   }, [mappings]);
 
@@ -112,6 +118,7 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
     (updated[index] as any)[field] = value;
     updated[index].dirty = true;
     setRows(updated);
+    setSuccessMsg('');
   }
 
   function removeRow(index: number) {
@@ -165,9 +172,12 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
+      setRows((prev) => prev.map((r) => ({ ...r, dirty: false })));
       setError('');
+      setSuccessMsg('Mappings saved successfully');
+      setTimeout(() => setSuccessMsg(''), 3000);
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => { setError(e.message); setSuccessMsg(''); },
   });
 
   const deleteMut = useMutation({
@@ -225,6 +235,7 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
       </div>
 
       {error && <div className="px-6 py-2 bg-red-50 border-b border-red-100"><p className="text-xs text-red-600 whitespace-pre-line">{error}</p></div>}
+      {successMsg && <div className="px-6 py-2 bg-green-50 border-b border-green-100"><p className="text-xs text-green-700">✓ {successMsg}</p></div>}
 
       {/* Bulk import */}
       {showBulk && (

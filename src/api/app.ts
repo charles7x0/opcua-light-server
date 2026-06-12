@@ -12,6 +12,7 @@ import type { Database } from '../db/database.js';
 import type { ProcessManager } from '../process-manager/index.js';
 import type { ConfigGenerator } from '../config-generator/index.js';
 import type { S7Connector } from '../s7-connector/index.js';
+import type { TofuManager } from '../tofu-manager/index.js';
 import type { AuthConfig } from '../auth/config.js';
 import { createAuthMiddleware } from '../auth/middleware.js';
 import { NodeRepository } from '../db/repositories/node-repository.js';
@@ -24,6 +25,8 @@ import { createObjectNodeRouter } from './routes/object-nodes.js';
 import { createServerRouter } from './routes/server.js';
 import { createSecurityRouter } from './routes/security.js';
 import { createS7Router } from './routes/s7.js';
+import { createFileRouter } from './routes/files.js';
+import { createPkiRouter } from './routes/pki.js';
 import { logService } from '../log/index.js';
 import type { ErrorResponse } from '../types/api.js';
 
@@ -34,6 +37,7 @@ export interface AppDependencies {
   configGenerator: ConfigGenerator;
   s7Connector?: S7Connector;
   authConfig: AuthConfig;
+  tofuManager: TofuManager;
 }
 
 /**
@@ -43,7 +47,7 @@ export interface AppDependencies {
  * which is unauthenticated for health monitoring.
  */
 export function createApp(deps: AppDependencies): Express {
-  const { database, processManager, configGenerator, s7Connector, authConfig } = deps;
+  const { database, processManager, configGenerator, s7Connector, authConfig, tofuManager } = deps;
 
   const app = express();
 
@@ -107,6 +111,8 @@ export function createApp(deps: AppDependencies): Express {
   app.use('/api/server', createServerRouter({ processManager, configGenerator, s7Connector }));
   app.use('/api/security', createSecurityRouter(securityRepo));
   app.use('/api/s7', createS7Router(s7Repo, s7Connector));
+  app.use('/api/files', createFileRouter());
+  app.use('/api/pki/certificates', createPkiRouter(tofuManager));
 
   // ─── System Logs Endpoint ───────────────────────────────────────────────────
   app.get('/api/logs', (req: Request, res: Response) => {

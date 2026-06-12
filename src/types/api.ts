@@ -29,7 +29,10 @@ export type ErrorCode =
   | 'UNAUTHORIZED'
   | 'INTERNAL_ERROR'
   | 'SERVICE_UNAVAILABLE'
-  | 'RUNTIME_ERROR';
+  | 'RUNTIME_ERROR'
+  | 'CERTIFICATE_NOT_FOUND'
+  | 'ACCESS_DENIED'
+  | 'CONFLICT';
 
 // --- Node DTOs ---
 
@@ -88,6 +91,22 @@ export interface UpdateSecurityPolicyRequest {
 export interface UploadCertificateRequest {
   certificatePath: string;
   privateKeyPath: string;
+}
+
+/** Request body for generating a self-signed certificate. */
+export interface GenerateCertificateRequest {
+  /** Subject Alternative Name DNS entries (optional, industrial environments often lack DNS) */
+  dnsNames?: string[];
+  /** Subject Alternative Name IP entries (auto-detected if not provided) */
+  ipAddresses?: string[];
+  /** Organization name for the certificate subject */
+  organization?: string;
+  /** Country code (2-letter) */
+  country?: string;
+  /** Common Name for the certificate subject */
+  commonName?: string;
+  /** Force overwrite if certificate already exists (required: true) */
+  force?: boolean;
 }
 
 // --- S7 DTOs ---

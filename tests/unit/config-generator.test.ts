@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, readFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
+import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { Database } from '../../src/db/database.js';
 import { ConfigGenerator } from '../../src/config-generator/index.js';
@@ -37,6 +37,10 @@ describe('ConfigGenerator', () => {
     });
 
     it('should include security config with certificate and key paths', () => {
+      // Create PKI directories so the config generator doesn't fall back to "None"
+      mkdirSync(resolve('data/pki/trusted'), { recursive: true });
+      mkdirSync(resolve('data/pki/rejected'), { recursive: true });
+
       const conn = db.getConnection();
       conn.prepare(
         "UPDATE security_config SET mode = 'SignAndEncrypt', certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1"
@@ -47,6 +51,44 @@ describe('ConfigGenerator', () => {
       expect(config.security.mode).toBe('SignAndEncrypt');
       expect(config.security.certificatePath).toBe('/certs/server.der');
       expect(config.security.privateKeyPath).toBe('/certs/server.key');
+      expect(config.security.pkiTrustedPath).toBe(resolve('data/pki/trusted'));
+      expect(config.security.pkiRejectedPath).toBe(resolve('data/pki/rejected'));
+    });
+
+    it('should fall back to None when security mode requires certs but none are configured', () => {
+      const conn = db.getConnection();
+      conn.prepare(
+        "UPDATE security_config SET mode = 'SignAndEncrypt', certificate_path = NULL, private_key_path = NULL WHERE id = 1"
+      ).run();
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const config = generator.generate();
+
+      expect(config.security.mode).toBe('None');
+      expect(config.security.certificatePath).toBeUndefined();
+      expect(config.security.privateKeyPath).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Falling back to "None"')
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('should fall back to None when only certificate path is missing', () => {
+      const conn = db.getConnection();
+      conn.prepare(
+        "UPDATE security_config SET mode = 'Sign', certificate_path = NULL, private_key_path = '/certs/server.key' WHERE id = 1"
+      ).run();
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const config = generator.generate();
+
+      expect(config.security.mode).toBe('None');
+      expect(warnSpy).toHaveBeenCalled();
+
+      warnSpy.mockRestore();
     });
 
     it('should return empty namespaces array when no namespaces exist', () => {

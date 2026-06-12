@@ -153,8 +153,8 @@ describe('Runtime Lifecycle Integration Tests', () => {
       seedTestData();
       const conn = db.getConnection();
       conn.prepare(
-        `UPDATE security_config SET mode = ?, certificate_path = ? WHERE id = 1`
-      ).run('Sign', '/certs/server.der');
+        `UPDATE security_config SET mode = ?, certificate_path = ?, private_key_path = ? WHERE id = 1`
+      ).run('Sign', '/certs/server.der', '/certs/server.key');
 
       generateConfig();
       const config = JSON.parse(readFileSync(configFilePath, 'utf-8'));
