@@ -18,6 +18,14 @@ UA_StatusCode tofu_verify_certificate(void *verificationContext,
                                       const UA_ByteString *certificate);
 
 /**
+ * Application URI verification callback for TOFU.
+ * Always returns GOOD since TOFU trusts the certificate including its URI claim.
+ */
+UA_StatusCode tofu_verify_application_uri(void *verificationContext,
+                                          const UA_ByteString *certificate,
+                                          const UA_String *applicationURI);
+
+/**
  * Compute SHA-1 thumbprint of DER-encoded certificate as 40-char lowercase hex.
  * out_hex must be at least 41 bytes (40 hex chars + null terminator).
  */

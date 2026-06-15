@@ -797,7 +797,7 @@ static int configure_security(UA_Server *server, cJSON *security) {
             UA_ServerConfig *cfg = UA_Server_getConfig(server);
             cfg->certificateVerification.context = &g_tofu_ctx;
             cfg->certificateVerification.verifyCertificate = tofu_verify_certificate;
-            cfg->certificateVerification.verifyApplicationURI = NULL;
+            cfg->certificateVerification.verifyApplicationURI = tofu_verify_application_uri;
             cfg->certificateVerification.clear = NULL;
 
             printf("  TOFU certificate verifier registered\n");

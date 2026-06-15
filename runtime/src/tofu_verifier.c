@@ -95,6 +95,18 @@ UA_StatusCode tofu_verify_certificate(void *verificationContext,
     return UA_STATUSCODE_GOOD;
 }
 
+/* ─── Application URI Verification ─────────────────────────────────────────── */
+
+UA_StatusCode tofu_verify_application_uri(void *verificationContext,
+                                          const UA_ByteString *certificate,
+                                          const UA_String *applicationURI) {
+    (void)verificationContext;
+    (void)certificate;
+    (void)applicationURI;
+    /* TOFU model: we trust the certificate as-is, including its URI claim. */
+    return UA_STATUSCODE_GOOD;
+}
+
 /* ─── Trust Store Reload ───────────────────────────────────────────────────── */
 
 void tofu_reload_trust_store(TofuVerifierContext *ctx) {

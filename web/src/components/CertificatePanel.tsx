@@ -40,6 +40,7 @@ export function CertificatePanel(): JSX.Element {
   const { data: certificates, isLoading, error } = useQuery({
     queryKey: ['pki-certificates'],
     queryFn: getPkiCertificates,
+    refetchInterval: 5000,
   });
 
   const rejectMutation = useMutation({
