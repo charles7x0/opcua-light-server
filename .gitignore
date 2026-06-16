@@ -9,3 +9,4 @@ runtime/opcua-runtime.exe
 .env
 .env.local
 coverage/
+benchmark_*.csv
