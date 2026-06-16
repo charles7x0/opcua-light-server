@@ -13,7 +13,11 @@
     "test:unit": "vitest run --project unit",
     "test:property": "vitest run --project property",
     "test:integration": "vitest run --project integration",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "stress:clients": "tsx tests/stress/stress-clients.ts",
+    "stress:variables": "tsx tests/stress/stress-variables.ts",
+    "stress:churn": "tsx tests/stress/stress-churn.ts",
+    "stress:combined": "tsx tests/stress/stress-combined.ts"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -42,6 +46,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "fast-check": "^3.23.0",
     "jsdom": "^29.1.1",
+    "node-opcua-client": "^2.173.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsx": "^4.19.0",
