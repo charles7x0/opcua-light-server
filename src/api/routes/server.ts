@@ -22,10 +22,11 @@ export interface ServerRouterOptions {
  * Creates an Express Router with server lifecycle endpoints.
  *
  * Endpoints:
- * - POST /start  — Generate config and start the OPC UA runtime
- * - POST /stop   — Gracefully stop the OPC UA runtime
- * - POST /reload — Regenerate config and reload the address space
- * - GET  /status — Get current server status (unauthenticated)
+ * - POST /start   — Generate config and start the OPC UA runtime
+ * - POST /stop    — Gracefully stop the OPC UA runtime
+ * - POST /reload  — Regenerate config and reload the address space
+ * - GET  /status  — Get current server status (unauthenticated)
+ * - GET  /clients — Get connected client sessions (unauthenticated)
  */
 export function createServerRouter(options: ServerRouterOptions): Router {
   const {
@@ -184,6 +185,27 @@ export function createServerRouter(options: ServerRouterOptions): Router {
       res.status(200).json(status);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to get server status';
+      const errorResponse: ErrorResponse = {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message,
+        },
+      };
+      res.status(500).json(errorResponse);
+    }
+  });
+
+  /**
+   * GET /clients
+   * Returns an array of connected client sessions. This endpoint is unauthenticated
+   * consistent with the existing status endpoint (Requirement 2.5).
+   */
+  router.get('/clients', (req: Request, res: Response): void => {
+    try {
+      const sessions = processManager.readClientSessions();
+      res.status(200).json(sessions);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get connected clients';
       const errorResponse: ErrorResponse = {
         error: {
           code: 'INTERNAL_ERROR',

@@ -109,3 +109,16 @@ export interface S7ConnectionStatus {
   lastPollAt?: string;
   errorMessage?: string;
 }
+
+/** Session state for a connected OPC UA client. */
+export type ClientSessionState = 'Created' | 'Activated' | 'Closing';
+
+/** A connected OPC UA client session as reported by the runtime. */
+export interface ClientSession {
+  applicationName: string;
+  applicationUri: string;
+  securityPolicyUri: string;
+  clientAddress: string;
+  connectTime: string; // ISO 8601
+  sessionState: ClientSessionState;
+}

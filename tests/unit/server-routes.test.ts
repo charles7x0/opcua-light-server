@@ -46,6 +46,7 @@ function createMockProcessManager(): ProcessManager {
     getStatus: vi.fn(),
     onCrash: vi.fn(),
     updateConnectedClients: vi.fn(),
+    readClientSessions: vi.fn().mockReturnValue([]),
   } as unknown as ProcessManager;
 }
 
@@ -332,6 +333,117 @@ describe('Server Lifecycle Routes', () => {
       await makeRequest(defaultApp, 'POST', '/api/server/start');
 
       expect(cg.writeToFile).toHaveBeenCalledWith('runtime/config.json');
+    });
+  });
+
+  describe('GET /api/server/clients', () => {
+    it('should return empty array when server is stopped', async () => {
+      (pm.readClientSessions as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+      const res = await makeRequest(app, 'GET', '/api/server/clients');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+      expect(pm.readClientSessions).toHaveBeenCalled();
+    });
+
+    it('should return empty array when status file has no sessions field', async () => {
+      // readClientSessions returns [] when sessions field is missing
+      (pm.readClientSessions as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+      const res = await makeRequest(app, 'GET', '/api/server/clients');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('should return valid sessions array when runtime is running', async () => {
+      const sessions = [
+        {
+          applicationName: 'UaExpert',
+          applicationUri: 'urn:UnifiedAutomation:UaExpert',
+          securityPolicyUri: 'http://opcfoundation.org/UA/SecurityPolicy#None',
+          clientAddress: '192.168.1.50:54321',
+          connectTime: '2024-01-15T10:30:00.000Z',
+          sessionState: 'Activated',
+        },
+        {
+          applicationName: 'TestClient',
+          applicationUri: 'urn:test:client',
+          securityPolicyUri: 'http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256',
+          clientAddress: '10.0.0.5:12345',
+          connectTime: '2024-01-15T11:00:00.000Z',
+          sessionState: 'Created',
+        },
+      ];
+
+      (pm.readClientSessions as ReturnType<typeof vi.fn>).mockReturnValue(sessions);
+
+      const res = await makeRequest(app, 'GET', '/api/server/clients');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(sessions);
+      expect(res.body).toHaveLength(2);
+      expect(res.body[0].applicationName).toBe('UaExpert');
+      expect(res.body[1].sessionState).toBe('Created');
+    });
+
+    it('should require no authentication', async () => {
+      // The endpoint should respond 200 without any auth headers
+      (pm.readClientSessions as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+      const res = await makeRequest(app, 'GET', '/api/server/clients');
+
+      // No auth headers were sent, should still get 200
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('should return 500 if readClientSessions throws', async () => {
+      (pm.readClientSessions as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw new Error('Failed to read status file');
+      });
+
+      const res = await makeRequest(app, 'GET', '/api/server/clients');
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_ERROR');
+      expect(res.body.error.message).toBe('Failed to read status file');
+    });
+  });
+
+  describe('GET /api/server/status (regression)', () => {
+    it('should still return expected shape with state, uptime, pid, and connectedClients when running', async () => {
+      (pm.getStatus as ReturnType<typeof vi.fn>).mockReturnValue({
+        state: 'running',
+        uptime: 120,
+        pid: 9999,
+        connectedClients: 5,
+      });
+
+      const res = await makeRequest(app, 'GET', '/api/server/status');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('state', 'running');
+      expect(res.body).toHaveProperty('uptime', 120);
+      expect(res.body).toHaveProperty('pid', 9999);
+      expect(res.body).toHaveProperty('connectedClients', 5);
+      // Ensure the response does NOT include a sessions field (kept separate)
+      expect(res.body).not.toHaveProperty('sessions');
+    });
+
+    it('should still return expected shape with only state when stopped', async () => {
+      (pm.getStatus as ReturnType<typeof vi.fn>).mockReturnValue({
+        state: 'stopped',
+      });
+
+      const res = await makeRequest(app, 'GET', '/api/server/status');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ state: 'stopped' });
+      expect(res.body).not.toHaveProperty('sessions');
+      expect(res.body).not.toHaveProperty('uptime');
+      expect(res.body).not.toHaveProperty('connectedClients');
     });
   });
 });

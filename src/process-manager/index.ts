@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from 'child_process';
 import { platform } from 'os';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
-import type { ServerStatus, StartResult } from '../types/index.js';
+import type { ClientSession, ServerStatus, StartResult } from '../types/index.js';
+import { validateSessions } from './validate-sessions.js';
 
 /**
  * ProcessManager handles the lifecycle of the open62541 OPC UA runtime process.
@@ -154,6 +155,27 @@ export class ProcessManager {
       return typeof data.connectedClients === 'number' ? data.connectedClients : 0;
     } catch {
       return 0;
+    }
+  }
+
+  /**
+   * Read client sessions from the runtime's status.json file.
+   * Returns validated session objects or an empty array if the runtime
+   * is not running, the file is missing, or the data is invalid.
+   */
+  readClientSessions(): ClientSession[] {
+    if (this.state !== 'running') {
+      return [];
+    }
+
+    try {
+      const statusPath = join(dirname(this.configFilePath), 'status.json');
+      if (!existsSync(statusPath)) return [];
+      const content = readFileSync(statusPath, 'utf-8');
+      const data = JSON.parse(content);
+      return validateSessions(data.sessions);
+    } catch {
+      return [];
     }
   }
 

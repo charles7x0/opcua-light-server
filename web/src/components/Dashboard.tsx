@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getServerStatus, startServer, stopServer, reloadServer, ServerStatus } from '../api';
+import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients, ServerStatus } from '../api';
+import { ConnectedClientsTable } from './ConnectedClientsTable';
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -45,10 +46,18 @@ export function Dashboard() {
     refetchInterval: 5000,
   });
 
+  const { data: clients = [] } = useQuery({
+    queryKey: ['server', 'clients'],
+    queryFn: getConnectedClients,
+    refetchInterval: 3000,
+    enabled: status?.state === 'running',
+  });
+
   const startMutation = useMutation({
     mutationFn: startServer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['server', 'clients'] });
     },
   });
 
@@ -56,6 +65,7 @@ export function Dashboard() {
     mutationFn: stopServer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['server', 'clients'] });
     },
   });
 
@@ -63,6 +73,7 @@ export function Dashboard() {
     mutationFn: reloadServer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['server', 'clients'] });
     },
   });
 
@@ -70,7 +81,7 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
+      <div role="status" aria-live="polite" className="rounded-lg border border-gray-200 bg-white p-6">
         <p className="text-gray-500">Loading server status...</p>
       </div>
     );
@@ -78,7 +89,7 @@ export function Dashboard() {
 
   if (isError || !status) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+      <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-6">
         <p className="text-red-700">Failed to fetch server status. Is the Control API running?</p>
       </div>
     );
@@ -126,6 +137,14 @@ export function Dashboard() {
         )}
       </div>
 
+      {/* Connected Clients Table - shown only when server is running */}
+      {status.state === 'running' && (
+        <section aria-label="Connected clients">
+          <h3 className="text-base font-semibold text-gray-900 mb-3">Connected Clients</h3>
+          <ConnectedClientsTable sessions={clients} />
+        </section>
+      )}
+
       {/* Control Buttons */}
       <div className="flex gap-3">
         <button
@@ -152,18 +171,20 @@ export function Dashboard() {
       </div>
 
       {/* Mutation feedback */}
-      {startMutation.isError && (
-        <p className="text-sm text-red-600">Failed to start server: {startMutation.error.message}</p>
-      )}
-      {stopMutation.isError && (
-        <p className="text-sm text-red-600">Failed to stop server: {stopMutation.error.message}</p>
-      )}
-      {reloadMutation.isError && (
-        <p className="text-sm text-red-600">Failed to reload server: {reloadMutation.error.message}</p>
-      )}
-      {reloadMutation.isSuccess && (
-        <p className="text-sm text-green-600">Server configuration reloaded successfully.</p>
-      )}
+      <div aria-live="polite" aria-atomic="true">
+        {startMutation.isError && (
+          <p role="alert" className="text-sm text-red-600">Failed to start server: {startMutation.error.message}</p>
+        )}
+        {stopMutation.isError && (
+          <p role="alert" className="text-sm text-red-600">Failed to stop server: {stopMutation.error.message}</p>
+        )}
+        {reloadMutation.isError && (
+          <p role="alert" className="text-sm text-red-600">Failed to reload server: {reloadMutation.error.message}</p>
+        )}
+        {reloadMutation.isSuccess && (
+          <p className="text-sm text-green-600">Server configuration reloaded successfully.</p>
+        )}
+      </div>
     </div>
   );
 }

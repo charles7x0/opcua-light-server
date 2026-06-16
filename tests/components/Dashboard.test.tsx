@@ -10,14 +10,16 @@ vi.mock('../../web/src/api', () => ({
   startServer: vi.fn(),
   stopServer: vi.fn(),
   reloadServer: vi.fn(),
+  getConnectedClients: vi.fn(),
 }));
 
-import { getServerStatus, startServer, stopServer, reloadServer } from '../../web/src/api';
+import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients } from '../../web/src/api';
 
 const mockedGetServerStatus = vi.mocked(getServerStatus);
 const mockedStartServer = vi.mocked(startServer);
 const mockedStopServer = vi.mocked(stopServer);
 const mockedReloadServer = vi.mocked(reloadServer);
+const mockedGetConnectedClients = vi.mocked(getConnectedClients);
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -36,6 +38,7 @@ function createWrapper() {
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedGetConnectedClients.mockResolvedValue([]);
   });
 
   it('shows loading state initially', () => {
@@ -85,6 +88,55 @@ describe('Dashboard', () => {
     // Uptime and clients should not be shown
     expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
     expect(screen.queryByText('Connected Clients')).not.toBeInTheDocument();
+  });
+
+  it('hides connected clients table when server is stopped', async () => {
+    mockedGetServerStatus.mockResolvedValue({
+      state: 'stopped',
+    });
+
+    render(<Dashboard />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Stopped')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Connected Clients' })).not.toBeInTheDocument();
+    expect(mockedGetConnectedClients).not.toHaveBeenCalled();
+  });
+
+  it('shows clients table when server is running', async () => {
+    mockedGetServerStatus.mockResolvedValue({
+      state: 'running',
+      uptime: 100,
+      connectedClients: 1,
+    });
+    mockedGetConnectedClients.mockResolvedValue([
+      {
+        applicationName: 'TestClient',
+        applicationUri: 'urn:test:client',
+        securityPolicyUri: 'http://opcfoundation.org/UA/SecurityPolicy#None',
+        clientAddress: '192.168.1.10:54321',
+        connectTime: '2024-01-15T10:30:00.000Z',
+        sessionState: 'Activated',
+      },
+    ]);
+
+    render(<Dashboard />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Connected Clients' })).toBeInTheDocument();
+    });
+
+    // Verify getConnectedClients was called since server is running
+    await waitFor(() => {
+      expect(mockedGetConnectedClients).toHaveBeenCalled();
+    });
+
+    // Wait for client data to render in the table
+    await waitFor(() => {
+      expect(screen.getByText('TestClient')).toBeInTheDocument();
+    });
   });
 
   it('renders error status with error message', async () => {
