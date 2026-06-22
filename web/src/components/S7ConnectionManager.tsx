@@ -11,12 +11,14 @@ import {
   createS7MappingsBulk,
   deleteS7Mapping,
   getS7Status,
+  getS7Values,
   getNodes,
   getNamespaces,
   getObjectNodeTree,
   S7Connection,
   S7MappingItem,
   S7ConnectionStatus,
+  S7CurrentValue,
   OpcUaNode,
   ObjectNode,
   Namespace,
@@ -67,11 +69,12 @@ function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onCo
 
 // ─── Connection Mappings (per connection) ─────────────────────────────────────
 
-function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
+function ConnectionMappings({ connection, mappings, allNodes, getNodePath, currentValues }: {
   connection: S7Connection;
   mappings: S7MappingItem[];
   allNodes: OpcUaNode[];
   getNodePath: (node: OpcUaNode) => string;
+  currentValues: S7CurrentValue[];
 }) {
   const queryClient = useQueryClient();
   const [showBulk, setShowBulk] = useState(false);
@@ -266,12 +269,14 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
               <th className="px-2 py-2 font-medium w-[160px]">Description</th>
               <th className="px-2 py-2 font-medium">Node</th>
               <th className="px-2 py-2 font-medium w-[70px]">Type</th>
+              <th className="px-2 py-2 font-medium w-[130px]">Current Value</th>
               <th className="px-2 pr-6 py-2 font-medium w-[40px]"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {rows.map((row, idx) => {
               const selectedNode = allNodes.find((n) => n.id === row.nodeId);
+              const liveValue = row.id ? currentValues.find((v) => v.nodeId === row.nodeId) : undefined;
               return (
                 <tr key={row.id ?? `new-${idx}`} className={`${row.dirty ? 'bg-yellow-50/50' : ''}`}>
                   <td className="pl-6 pr-2 py-1">
@@ -305,6 +310,18 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath }: {
                   <td className="px-2 py-1 text-center">
                     {selectedNode && (
                       <span className="inline-block rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600">{selectedNode.dataType}</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {liveValue ? (
+                      <span className={`inline-flex items-center gap-1 text-xs font-mono ${liveValue.quality === 'good' ? 'text-gray-900' : 'text-red-500'}`}>
+                        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${liveValue.quality === 'good' ? 'bg-green-500' : 'bg-red-500'}`} />
+                        {liveValue.value !== undefined && liveValue.value !== null
+                          ? String(liveValue.value)
+                          : <span className="text-gray-400 italic">—</span>}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">—</span>
                     )}
                   </td>
                   <td className="px-2 pr-6 py-1 text-center">
@@ -345,6 +362,7 @@ export function S7ConnectionManager() {
   const { data: connections = [], isLoading } = useQuery<S7Connection[]>({ queryKey: ['s7-connections'], queryFn: getS7Connections });
   const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({ queryKey: ['s7-status'], queryFn: getS7Status, refetchInterval: 5000 });
   const { data: mappings = [] } = useQuery<S7MappingItem[]>({ queryKey: ['s7-mappings'], queryFn: getS7Mappings });
+  const { data: currentValues = [] } = useQuery<S7CurrentValue[]>({ queryKey: ['s7-values'], queryFn: getS7Values, refetchInterval: 2000 });
   const { data: allNodes = [] } = useQuery<OpcUaNode[]>({ queryKey: ['nodes'], queryFn: getNodes });
   const { data: namespaces = [] } = useQuery<Namespace[]>({ queryKey: ['namespaces'], queryFn: getNamespaces });
 
@@ -500,6 +518,7 @@ export function S7ConnectionManager() {
                 mappings={connMappings}
                 allNodes={allNodes}
                 getNodePath={getNodePath}
+                currentValues={currentValues.filter((v) => v.connectionId === conn.id)}
               />
             </div>
           );

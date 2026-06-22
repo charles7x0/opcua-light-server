@@ -50,6 +50,18 @@ interface ManagedConnection {
 }
 
 /**
+ * Snapshot of the last-read value for a mapped variable.
+ */
+export interface S7CurrentValue {
+  nodeId: string;
+  plcAddress: string;
+  connectionId: string;
+  value: unknown;
+  quality: 'good' | 'bad';
+  timestamp: string;
+}
+
+/**
  * S7Connector manages connections to Siemens S7 PLCs, polls mapped variables
  * at configured intervals, and communicates value updates to the runtime.
  *
@@ -62,6 +74,8 @@ export class S7Connector {
   private running = false;
   private valueUpdateCallback: ValueUpdateCallback | null = null;
   private logEntries: S7LogEntry[] = [];
+  /** In-memory cache of the last-read value per mapping ID. */
+  private currentValues: Map<string, S7CurrentValue> = new Map();
 
   /**
    * Register a callback to receive value updates from PLC polling.
@@ -196,6 +210,14 @@ export class S7Connector {
       }
     }
     throw new Error(`Mapping with id '${id}' not found`);
+  }
+
+  /**
+   * Get the last-read values for all mapped variables across all connections.
+   * Returns a snapshot of the most recent poll results.
+   */
+  getCurrentValues(): S7CurrentValue[] {
+    return Array.from(this.currentValues.values());
   }
 
   /**
@@ -348,11 +370,21 @@ export class S7Connector {
         for (const mapping of managed.mappings.values()) {
           const value = values[mapping.plcAddress];
           if (value !== undefined) {
+            const now = new Date();
             updates.push({
               nodeId: mapping.nodeId,
               value: value,
               quality: 'good',
-              timestamp: new Date(),
+              timestamp: now,
+            });
+            // Cache the current value for the live values API
+            this.currentValues.set(mapping.id, {
+              nodeId: mapping.nodeId,
+              plcAddress: mapping.plcAddress,
+              connectionId: managed.config.id,
+              value: value,
+              quality: 'good',
+              timestamp: now.toISOString(),
             });
           }
         }
@@ -425,6 +457,25 @@ export class S7Connector {
    * Used when connection state changes (connected → good, disconnected → bad).
    */
   private emitQualityUpdate(managed: ManagedConnection, quality: 'good' | 'bad'): void {
+    // Update cached values quality
+    for (const mapping of managed.mappings.values()) {
+      const cached = this.currentValues.get(mapping.id);
+      if (cached) {
+        cached.quality = quality;
+        cached.timestamp = new Date().toISOString();
+      } else if (quality === 'bad') {
+        // Create an entry so the UI can show the bad quality state
+        this.currentValues.set(mapping.id, {
+          nodeId: mapping.nodeId,
+          plcAddress: mapping.plcAddress,
+          connectionId: managed.config.id,
+          value: undefined,
+          quality: 'bad',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
     if (!this.valueUpdateCallback) return;
     if (managed.mappings.size === 0) return;
 

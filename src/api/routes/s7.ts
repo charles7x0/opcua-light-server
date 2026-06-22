@@ -327,6 +327,15 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
     return res.json(statuses);
   });
 
+  /** GET /api/s7/values - Get current live values for all mapped variables */
+  router.get('/values', (_req: Request, res: Response) => {
+    if (s7Connector) {
+      const values = s7Connector.getCurrentValues();
+      return res.json(values);
+    }
+    return res.json([]);
+  });
+
   /** GET /api/s7/logs - Get S7 connector log entries */
   router.get('/logs', (req: Request, res: Response) => {
     if (!s7Connector) {

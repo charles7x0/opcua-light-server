@@ -336,6 +336,19 @@ export function getS7Status(): Promise<S7ConnectionStatus[]> {
   return request<S7ConnectionStatus[]>('/s7/status');
 }
 
+export interface S7CurrentValue {
+  nodeId: string;
+  plcAddress: string;
+  connectionId: string;
+  value: unknown;
+  quality: 'good' | 'bad';
+  timestamp: string;
+}
+
+export function getS7Values(): Promise<S7CurrentValue[]> {
+  return request<S7CurrentValue[]>('/s7/values');
+}
+
 export interface S7LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error';
