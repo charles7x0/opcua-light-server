@@ -12,6 +12,8 @@ import {
   deleteS7Mapping,
   getS7Status,
   getS7Values,
+  exportS7MappingsCsv,
+  importS7MappingsCsv,
   getNodes,
   getNamespaces,
   getObjectNodeTree,
@@ -19,6 +21,7 @@ import {
   S7MappingItem,
   S7ConnectionStatus,
   S7CurrentValue,
+  S7MappingImportResult,
   OpcUaNode,
   ObjectNode,
   Namespace,
@@ -357,6 +360,10 @@ export function S7ConnectionManager() {
   const [connForm, setConnForm] = useState<ConnectionFormData>(EMPTY_CONN_FORM);
   const [connError, setConnError] = useState('');
   const [deleteConnId, setDeleteConnId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<S7MappingImportResult | null>(null);
+  const [importError, setImportError] = useState('');
 
   // Queries
   const { data: connections = [], isLoading } = useQuery<S7Connection[]>({ queryKey: ['s7-connections'], queryFn: getS7Connections });
@@ -441,8 +448,64 @@ export function S7ConnectionManager() {
         <p className="mt-1 text-sm text-gray-500">Manage Siemens S7 PLC connections and variable mappings.</p>
       </div>
 
-      {/* New Connection button */}
-      <div className="flex justify-end">
+      {/* New Connection button + Import/Export */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Export CSV */}
+          <button
+            onClick={async () => {
+              setIsExporting(true);
+              try {
+                const csv = await exportS7MappingsCsv();
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 's7-mappings.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e) {
+                alert('Export failed: ' + (e instanceof Error ? e.message : 'Unknown error'));
+              } finally {
+                setIsExporting(false);
+              }
+            }}
+            disabled={isExporting}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isExporting ? 'Exporting...' : '📥 Export Mappings CSV'}
+          </button>
+
+          {/* Import CSV */}
+          <label className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+            {isImporting ? 'Importing...' : '📤 Import Mappings CSV'}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              disabled={isImporting}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setIsImporting(true);
+                setImportResult(null);
+                setImportError('');
+                try {
+                  const text = await file.text();
+                  const result = await importS7MappingsCsv(text);
+                  setImportResult(result);
+                  queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
+                } catch (err) {
+                  setImportError(err instanceof Error ? err.message : 'Import failed');
+                } finally {
+                  setIsImporting(false);
+                  e.target.value = '';
+                }
+              }}
+            />
+          </label>
+        </div>
+
         <button
           onClick={() => { showConnForm ? resetConnForm() : setShowConnForm(true); }}
           className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
@@ -450,6 +513,31 @@ export function S7ConnectionManager() {
           {showConnForm ? 'Cancel' : '+ New Connection'}
         </button>
       </div>
+
+      {/* Import results */}
+      {importResult && (
+        <div className={`rounded-md border p-4 text-sm ${importResult.summary.failed > 0 ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'}`}>
+          <div className="flex items-center justify-between">
+            <p className={importResult.summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}>
+              Import complete: {importResult.summary.succeeded} succeeded, {importResult.summary.failed} failed out of {importResult.summary.total} rows.
+            </p>
+            <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          {importResult.summary.failed > 0 && (
+            <ul className="mt-2 space-y-0.5 text-xs text-yellow-700 max-h-32 overflow-y-auto">
+              {importResult.results.filter((r) => !r.success).map((r) => (
+                <li key={r.row}>Row {r.row}{r.plcAddress ? ` (${r.plcAddress})` : ''}: {r.error}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {importError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between">
+          <p>{importError}</p>
+          <button onClick={() => setImportError('')} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
 
       {/* Connection Form */}
       {showConnForm && (

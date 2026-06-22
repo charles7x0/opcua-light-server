@@ -185,6 +185,32 @@ export function deleteNode(id: string): Promise<void> {
   return request<void>(`/nodes/${id}`, { method: 'DELETE' });
 }
 
+export interface CsvImportResult {
+  summary: { total: number; succeeded: number; failed: number };
+  results: Array<{ row: number; success: boolean; name?: string; error?: string }>;
+}
+
+export function exportNodesCsv(): Promise<string> {
+  return fetch(`${BASE_URL}/nodes/export/csv`, {
+    headers: (() => {
+      const h: Record<string, string> = {};
+      const apiKey = localStorage.getItem('opcua-api-key');
+      if (apiKey) h['X-API-Key'] = apiKey;
+      return h;
+    })(),
+  }).then((res) => {
+    if (!res.ok) throw new Error('Export failed');
+    return res.text();
+  });
+}
+
+export function importNodesCsv(csv: string): Promise<CsvImportResult> {
+  return request<CsvImportResult>('/nodes/import/csv', {
+    method: 'POST',
+    body: JSON.stringify({ csv }),
+  });
+}
+
 // ─── Security ─────────────────────────────────────────────────────────────────
 
 export interface SecurityConfig {
@@ -347,6 +373,32 @@ export interface S7CurrentValue {
 
 export function getS7Values(): Promise<S7CurrentValue[]> {
   return request<S7CurrentValue[]>('/s7/values');
+}
+
+export interface S7MappingImportResult {
+  summary: { total: number; succeeded: number; failed: number };
+  results: Array<{ row: number; success: boolean; plcAddress?: string; error?: string }>;
+}
+
+export function exportS7MappingsCsv(): Promise<string> {
+  return fetch(`${BASE_URL}/s7/mappings/export/csv`, {
+    headers: (() => {
+      const h: Record<string, string> = {};
+      const apiKey = localStorage.getItem('opcua-api-key');
+      if (apiKey) h['X-API-Key'] = apiKey;
+      return h;
+    })(),
+  }).then((res) => {
+    if (!res.ok) throw new Error('Export failed');
+    return res.text();
+  });
+}
+
+export function importS7MappingsCsv(csv: string): Promise<S7MappingImportResult> {
+  return request<S7MappingImportResult>('/s7/mappings/import/csv', {
+    method: 'POST',
+    body: JSON.stringify({ csv }),
+  });
 }
 
 export interface S7LogEntry {

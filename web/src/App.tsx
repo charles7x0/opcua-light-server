@@ -8,7 +8,7 @@ import { NamespaceManager } from './components/NamespaceManager';
 import { SecuritySettings } from './components/SecuritySettings';
 import { S7ConnectionManager } from './components/S7ConnectionManager';
 import { StatusBar } from './components/StatusBar';
-import { deleteNode } from './api';
+import { deleteNode, exportNodesCsv, importNodesCsv, CsvImportResult } from './api';
 
 type Section = 'dashboard' | 'address-space' | 'security' | 's7';
 
@@ -69,6 +69,10 @@ function AddressSpaceSection() {
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [showNodeForm, setShowNodeForm] = useState(false);
   const [editingNode, setEditingNode] = useState<SelectedNode | null>(null);
+  const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
+  const [importError, setImportError] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -148,16 +152,98 @@ function AddressSpaceSection() {
 
       {/* Create node split button */}
       {!showNodeForm && !editingNode && (
-        <CreateNodeSplitButton
-          onCreateVariable={() => {
-            setShowNodeForm(true);
-            setSelectedNode(null);
-          }}
-          onCreateObjectNode={() => {
-            // Scroll to the tree where the inline "+" buttons are
-            alert('Use the "+" button on a namespace or object node in the tree above to create an object node (subfolder).');
-          }}
-        />
+        <div className="flex items-center gap-3 flex-wrap">
+          <CreateNodeSplitButton
+            onCreateVariable={() => {
+              setShowNodeForm(true);
+              setSelectedNode(null);
+            }}
+            onCreateObjectNode={() => {
+              // Scroll to the tree where the inline "+" buttons are
+              alert('Use the "+" button on a namespace or object node in the tree above to create an object node (subfolder).');
+            }}
+          />
+
+          {/* Export CSV */}
+          <button
+            onClick={async () => {
+              setIsExporting(true);
+              try {
+                const csv = await exportNodesCsv();
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'nodes.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e) {
+                alert('Export failed: ' + (e instanceof Error ? e.message : 'Unknown error'));
+              } finally {
+                setIsExporting(false);
+              }
+            }}
+            disabled={isExporting}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isExporting ? 'Exporting...' : '📥 Export CSV'}
+          </button>
+
+          {/* Import CSV */}
+          <label className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+            {isImporting ? 'Importing...' : '📤 Import CSV'}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              disabled={isImporting}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setIsImporting(true);
+                setImportResult(null);
+                setImportError('');
+                try {
+                  const text = await file.text();
+                  const result = await importNodesCsv(text);
+                  setImportResult(result);
+                  queryClient.invalidateQueries({ queryKey: ['nodes'] });
+                  queryClient.invalidateQueries({ queryKey: ['namespaces'] });
+                } catch (err) {
+                  setImportError(err instanceof Error ? err.message : 'Import failed');
+                } finally {
+                  setIsImporting(false);
+                  e.target.value = '';
+                }
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {/* Import results */}
+      {importResult && (
+        <div className={`rounded-md border p-4 text-sm ${importResult.summary.failed > 0 ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'}`}>
+          <div className="flex items-center justify-between">
+            <p className={importResult.summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}>
+              Import complete: {importResult.summary.succeeded} succeeded, {importResult.summary.failed} failed out of {importResult.summary.total} rows.
+            </p>
+            <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          {importResult.summary.failed > 0 && (
+            <ul className="mt-2 space-y-0.5 text-xs text-yellow-700 max-h-32 overflow-y-auto">
+              {importResult.results.filter((r) => !r.success).map((r) => (
+                <li key={r.row}>Row {r.row}{r.name ? ` (${r.name})` : ''}: {r.error}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {importError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between">
+          <p>{importError}</p>
+          <button onClick={() => setImportError('')} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
       )}
     </div>
   );

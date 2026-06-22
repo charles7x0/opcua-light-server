@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { S7Repository } from '../../db/repositories/s7-repository.js';
 import type { S7Connector } from '../../s7-connector/index.js';
+import type { Database } from '../../db/database.js';
 import type {
   CreateS7ConnectionRequest,
   CreateS7MappingRequest,
@@ -10,9 +11,14 @@ import type { S7ConnectionStatus } from '../../types/index.js';
 
 /**
  * Creates the S7 Connector API router.
- * Provides CRUD for connections, CRUD for mappings, and connection status.
+ * Provides CRUD for connections, CRUD for mappings, connection status,
+ * and CSV import/export of mappings.
+ *
+ * @param repository - S7 repository for persistence operations
+ * @param s7Connector - Optional live S7 Connector instance for real-time status and value updates
+ * @param database - Optional Database instance required for CSV export/import (node/namespace lookups)
  */
-export function createS7Router(repository: S7Repository, s7Connector?: S7Connector): Router {
+export function createS7Router(repository: S7Repository, s7Connector?: S7Connector, database?: Database): Router {
   const router = Router();
 
   // ─── Connection Endpoints ───────────────────────────────────────────────────
@@ -308,6 +314,188 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
     return res.status(allSucceeded ? 201 : 207).json(results);
   });
 
+  // ─── Mappings CSV Export ────────────────────────────────────────────────────
+
+  /** GET /api/s7/mappings/export/csv - Export all S7 mappings as CSV */
+  router.get('/mappings/export/csv', (_req: Request, res: Response) => {
+    try {
+      if (!database) {
+        const errorResponse: ErrorResponse = { error: { code: 'INTERNAL_ERROR', message: 'Database not available for export' } };
+        return res.status(500).json(errorResponse);
+      }
+
+      const db = database.getConnection();
+      const mappings = repository.findAllMappings();
+      const connections = repository.findAllConnections();
+
+      // Build lookup maps
+      const connMap = new Map(connections.map((c) => [c.id, c.name]));
+
+      const nodeRows = db.prepare('SELECT id, name, namespace_id FROM nodes').all() as Array<{ id: string; name: string; namespace_id: string }>;
+      const nodeMap = new Map(nodeRows.map((r) => [r.id, r]));
+
+      const nsRows = db.prepare('SELECT id, name FROM namespaces').all() as Array<{ id: string; name: string }>;
+      const nsMap = new Map(nsRows.map((r) => [r.id, r.name]));
+
+      // CSV header
+      const csvLines: string[] = ['connectionName,plcAddress,nodeName,namespace,description'];
+
+      for (const mapping of mappings) {
+        const connName = connMap.get(mapping.connectionId) ?? '';
+        const node = nodeMap.get(mapping.nodeId);
+        const nodeName = node?.name ?? '';
+        const nsName = node ? (nsMap.get(node.namespace_id) ?? '') : '';
+        const description = mapping.description ?? '';
+
+        csvLines.push([
+          escapeCsvField(connName),
+          escapeCsvField(mapping.plcAddress),
+          escapeCsvField(nodeName),
+          escapeCsvField(nsName),
+          escapeCsvField(description),
+        ].join(','));
+      }
+
+      const csv = csvLines.join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="s7-mappings.csv"');
+      return res.send(csv);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      const errorResponse: ErrorResponse = { error: { code: 'INTERNAL_ERROR', message: msg } };
+      return res.status(500).json(errorResponse);
+    }
+  });
+
+  // ─── Mappings CSV Import ────────────────────────────────────────────────────
+
+  /** POST /api/s7/mappings/import/csv - Import S7 mappings from CSV */
+  router.post('/mappings/import/csv', (req: Request, res: Response) => {
+    try {
+      if (!database) {
+        const errorResponse: ErrorResponse = { error: { code: 'INTERNAL_ERROR', message: 'Database not available for import' } };
+        return res.status(500).json(errorResponse);
+      }
+
+      const csvContent = req.body?.csv as string | undefined;
+      if (!csvContent || typeof csvContent !== 'string') {
+        const errorResponse: ErrorResponse = {
+          error: { code: 'VALIDATION_ERROR', message: 'Request body must include a "csv" field with the CSV content as a string' },
+        };
+        return res.status(400).json(errorResponse);
+      }
+
+      const db = database.getConnection();
+
+      // Build lookup maps
+      const connections = repository.findAllConnections();
+      const connNameToId = new Map(connections.map((c) => [c.name, c.id]));
+
+      const nodeRows = db.prepare('SELECT id, name, namespace_id FROM nodes').all() as Array<{ id: string; name: string; namespace_id: string }>;
+      const nsRows = db.prepare('SELECT id, name FROM namespaces').all() as Array<{ id: string; name: string }>;
+      const nsNameToId = new Map(nsRows.map((r) => [r.name, r.id]));
+
+      // Parse CSV
+      const lines = csvContent.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) {
+        const errorResponse: ErrorResponse = {
+          error: { code: 'VALIDATION_ERROR', message: 'CSV must contain a header row and at least one data row' },
+        };
+        return res.status(400).json(errorResponse);
+      }
+
+      // Validate header
+      const header = parseCsvLine(lines[0]);
+      const normalizedHeader = header.map((h) => h.toLowerCase().replace(/[^a-z]/g, ''));
+      if (normalizedHeader.length < 3 || normalizedHeader[0] !== 'connectionname' || normalizedHeader[1] !== 'plcaddress' || normalizedHeader[2] !== 'nodename') {
+        const errorResponse: ErrorResponse = {
+          error: { code: 'VALIDATION_ERROR', message: 'CSV header must have columns: connectionName,plcAddress,nodeName,namespace,description' },
+        };
+        return res.status(400).json(errorResponse);
+      }
+
+      const results: Array<{ row: number; success: boolean; plcAddress?: string; error?: string }> = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const fields = parseCsvLine(lines[i]);
+        if (fields.length < 3) {
+          results.push({ row: i + 1, success: false, error: 'Insufficient columns' });
+          continue;
+        }
+
+        const [connectionName, plcAddress, nodeName, namespaceName, description] = fields;
+
+        // Resolve connection
+        const connectionId = connNameToId.get(connectionName?.trim() ?? '');
+        if (!connectionId) {
+          results.push({ row: i + 1, success: false, plcAddress, error: `Connection "${connectionName}" not found` });
+          continue;
+        }
+
+        // Validate PLC address
+        if (!plcAddress?.trim()) {
+          results.push({ row: i + 1, success: false, error: 'PLC address is required' });
+          continue;
+        }
+
+        // Resolve node by name (+ namespace if provided)
+        if (!nodeName?.trim()) {
+          results.push({ row: i + 1, success: false, plcAddress, error: 'Node name is required' });
+          continue;
+        }
+
+        let matchedNodes = nodeRows.filter((n) => n.name === nodeName.trim());
+        if (namespaceName?.trim()) {
+          const nsId = nsNameToId.get(namespaceName.trim());
+          if (nsId) {
+            matchedNodes = matchedNodes.filter((n) => n.namespace_id === nsId);
+          }
+        }
+
+        if (matchedNodes.length === 0) {
+          results.push({ row: i + 1, success: false, plcAddress, error: `Node "${nodeName}" not found${namespaceName ? ` in namespace "${namespaceName}"` : ''}` });
+          continue;
+        }
+        if (matchedNodes.length > 1) {
+          results.push({ row: i + 1, success: false, plcAddress, error: `Multiple nodes named "${nodeName}" found — specify the namespace column to disambiguate` });
+          continue;
+        }
+
+        const nodeId = matchedNodes[0].id;
+
+        // Create mapping
+        const result = repository.createMapping({
+          connectionId,
+          nodeId,
+          plcAddress: plcAddress.trim(),
+          description: description?.trim() || undefined,
+        });
+
+        if (result.success) {
+          results.push({ row: i + 1, success: true, plcAddress: plcAddress.trim() });
+          // Notify S7 connector
+          if (s7Connector && result.data) {
+            try { s7Connector.addMapping(result.data); } catch { /* ignore */ }
+          }
+        } else {
+          results.push({ row: i + 1, success: false, plcAddress: plcAddress.trim(), error: result.error.message });
+        }
+      }
+
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      return res.status(failed === 0 ? 201 : 207).json({
+        summary: { total: results.length, succeeded, failed },
+        results,
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      const errorResponse: ErrorResponse = { error: { code: 'INTERNAL_ERROR', message: msg } };
+      return res.status(500).json(errorResponse);
+    }
+  });
+
   // ─── Status Endpoint ────────────────────────────────────────────────────────
 
   /** GET /api/s7/status - Get connection statuses */
@@ -347,4 +535,60 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
   });
 
   return router;
+}
+
+// ─── CSV Utilities ──────────────────────────────────────────────────────────
+
+/**
+ * Escape a field for CSV output (RFC 4180 compliant).
+ */
+function escapeCsvField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+/**
+ * Parse a single CSV line respecting quoted fields (RFC 4180).
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        current += char;
+        i++;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+        i++;
+      } else if (char === ',') {
+        fields.push(current);
+        current = '';
+        i++;
+      } else {
+        current += char;
+        i++;
+      }
+    }
+  }
+
+  fields.push(current);
+  return fields;
 }

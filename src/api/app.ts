@@ -101,7 +101,7 @@ export function createApp(deps: AppDependencies): Express {
   });
 
   // ─── Route Modules ──────────────────────────────────────────────────────────
-  app.use('/api/nodes', createNodeRoutes(nodeRepo));
+  app.use('/api/nodes', createNodeRoutes(nodeRepo, database));
   app.use('/api/namespaces', createNamespaceRouter(namespaceRepo));
 
   // Object node router handles both /api/object-nodes and /api/namespaces/:id/object-nodes
@@ -110,7 +110,7 @@ export function createApp(deps: AppDependencies): Express {
 
   app.use('/api/server', createServerRouter({ processManager, configGenerator, s7Connector }));
   app.use('/api/security', createSecurityRouter(securityRepo));
-  app.use('/api/s7', createS7Router(s7Repo, s7Connector));
+  app.use('/api/s7', createS7Router(s7Repo, s7Connector, database));
   app.use('/api/files', createFileRouter());
   app.use('/api/pki/certificates', createPkiRouter(tofuManager));
 
