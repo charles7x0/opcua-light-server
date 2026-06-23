@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import AddressSpaceTree from '../../web/src/components/AddressSpaceTree';
+import AddressSpaceTree from '../../web/src/screens/address-space/AddressSpaceTree';
 
 // Mock the API module
 vi.mock('../../web/src/api', () => ({

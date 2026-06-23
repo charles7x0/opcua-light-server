@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { ConnectedClientsTable } from '../../web/src/components/ConnectedClientsTable';
+import { ConnectedClientsTable } from '../../web/src/screens/dashboard/ConnectedClientsTable';
 import { ClientSession } from '../../web/src/api';
 
 /**

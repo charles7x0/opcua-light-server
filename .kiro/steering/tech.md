@@ -79,6 +79,7 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/server/status` | Server status (unauthenticated) |
+| GET | `/api/server/clients` | Connected client sessions (unauthenticated) |
 | POST | `/api/server/start` | Start OPC UA runtime |
 | POST | `/api/server/stop` | Stop OPC UA runtime |
 | POST | `/api/server/reload` | Hot-reload address space |
@@ -90,6 +91,8 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 | POST | `/api/files/browse` | Server-side file browser |
 | GET | `/api/nodes` | List nodes |
 | POST | `/api/nodes` | Create node |
+| GET | `/api/nodes/export/csv` | Export nodes as CSV |
+| POST | `/api/nodes/import/csv` | Import nodes from CSV |
 | GET | `/api/namespaces` | List namespaces |
 | GET | `/api/logs` | System log entries |
 | GET/POST/PUT/DELETE | `/api/s7/*` | S7 PLC connections and mappings |

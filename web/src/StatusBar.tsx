@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getServerStatus, getSystemLogs, getSecurityConfig, type ServerStatus, type LogEntry, type SecurityConfig } from '../api';
+import { getServerStatus, getSystemLogs, getSecurityConfig, type ServerStatus, type LogEntry, type SecurityConfig } from './api';
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);

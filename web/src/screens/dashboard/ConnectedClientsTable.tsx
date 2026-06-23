@@ -1,5 +1,6 @@
-import { ClientSession } from '../api';
-import { formatRelativeDuration } from '../utils/formatRelativeDuration';
+import { ClientSession } from '../../api';
+import { formatRelativeDuration } from '../../utils/formatRelativeDuration';
+import { Badge, Card } from '../../components';
 
 interface ConnectedClientsTableProps {
   sessions: ClientSession[];
@@ -8,9 +9,9 @@ interface ConnectedClientsTableProps {
 export function ConnectedClientsTable({ sessions }: ConnectedClientsTableProps) {
   if (sessions.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
+      <Card>
         <p className="text-sm text-gray-500">No clients connected</p>
-      </div>
+      </Card>
     );
   }
 
@@ -69,15 +70,11 @@ export function ConnectedClientsTable({ sessions }: ConnectedClientsTableProps) 
 }
 
 function SessionStateBadge({ state }: { state: ClientSession['sessionState'] }) {
-  const styles: Record<ClientSession['sessionState'], string> = {
-    Created: 'bg-blue-100 text-blue-800',
-    Activated: 'bg-green-100 text-green-800',
-    Closing: 'bg-yellow-100 text-yellow-800',
+  const variantMap: Record<ClientSession['sessionState'], 'blue' | 'green' | 'yellow'> = {
+    Created: 'blue',
+    Activated: 'green',
+    Closing: 'yellow',
   };
 
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[state]}`}>
-      {state}
-    </span>
-  );
+  return <Badge variant={variantMap[state]}>{state}</Badge>;
 }

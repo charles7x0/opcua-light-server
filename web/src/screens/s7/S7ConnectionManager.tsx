@@ -26,7 +26,9 @@ import {
   ObjectNode,
   Namespace,
   ApiError,
-} from '../api';
+} from '../../api';
+import { Button, Input, FormField, Badge, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
+import { downloadTextAsFile } from '../../utils/downloadFile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,33 +44,6 @@ interface ConnectionFormData {
 const EMPTY_CONN_FORM: ConnectionFormData = {
   name: '', host: '', rack: '0', slot: '1', pollingIntervalMs: '1000', reconnectIntervalMs: '5000',
 };
-
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-
-function StatusBadge({ state }: { state: S7ConnectionStatus['state'] }) {
-  const styles = { connected: 'bg-green-100 text-green-800', disconnected: 'bg-gray-100 text-gray-800', error: 'bg-red-100 text-red-800' };
-  const dots = { connected: 'bg-green-500', disconnected: 'bg-gray-400', error: 'bg-red-500' };
-  return (
-    <span role="status" aria-label={`Connection status: ${state}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[state]}`}>
-      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${dots[state]}`} />
-      {state}
-    </span>
-  );
-}
-
-// ─── Confirm Dialog ───────────────────────────────────────────────────────────
-
-function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div role="alertdialog" aria-labelledby={undefined} aria-describedby="confirm-msg" className="rounded-md border border-red-200 bg-red-50 p-3 mt-2">
-      <p id="confirm-msg" className="text-sm text-red-800">{message}</p>
-      <div className="flex gap-2 mt-2">
-        <button onClick={onConfirm} className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">Confirm</button>
-        <button onClick={onCancel} className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-      </div>
-    </div>
-  );
-}
 
 // ─── Connection Mappings (per connection) ─────────────────────────────────────
 
@@ -87,9 +62,8 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
   const [successMsg, setSuccessMsg] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // Editable rows state: one entry per existing mapping + new blank rows
   interface EditableRow {
-    id: string | null; // null = new row
+    id: string | null;
     plcAddress: string;
     description: string;
     nodeId: string;
@@ -97,22 +71,17 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
   }
 
   const [rows, setRows] = useState<EditableRow[]>([]);
-  const [initialized, setInitialized] = useState(false);
 
-  // Sync rows from props when mappings change
   useEffect(() => {
     setRows((prev) => {
       const mapped: EditableRow[] = mappings.map((m) => {
-        // Preserve local edits for dirty rows
         const existing = prev.find((r) => r.id === m.id);
         if (existing?.dirty) return existing;
         return { id: m.id, plcAddress: m.plcAddress, description: m.description ?? '', nodeId: m.nodeId, dirty: false };
       });
-      // Keep any new blank rows that have content
       const newRows = prev.filter((r) => r.id === null && (r.plcAddress || r.nodeId));
       return [...mapped, ...newRows];
     });
-    setInitialized(true);
   }, [mappings]);
 
   function addBlankRow() {
@@ -130,7 +99,6 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
   function removeRow(index: number) {
     const row = rows[index];
     if (row.id === null) {
-      // Just remove the blank row
       setRows(rows.filter((_, i) => i !== index));
     } else {
       setDeleteConfirmId(row.id);
@@ -139,41 +107,22 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
 
   const hasDirtyRows = rows.some((r) => r.dirty);
 
-  // Save all dirty rows
   const saveMut = useMutation({
     mutationFn: async () => {
       const dirtyRows = rows.filter((r) => r.dirty);
       const errors: string[] = [];
-
       for (const row of dirtyRows) {
-        if (!row.plcAddress.trim() || !row.nodeId) continue; // skip incomplete rows
-
+        if (!row.plcAddress.trim() || !row.nodeId) continue;
         if (row.id === null) {
-          // Create new
           try {
-            await createS7Mapping({
-              connectionId: connection.id,
-              nodeId: row.nodeId,
-              plcAddress: row.plcAddress.trim(),
-              description: row.description.trim() || undefined,
-            });
-          } catch (e) {
-            errors.push(`${row.plcAddress}: ${(e as Error).message}`);
-          }
+            await createS7Mapping({ connectionId: connection.id, nodeId: row.nodeId, plcAddress: row.plcAddress.trim(), description: row.description.trim() || undefined });
+          } catch (e) { errors.push(`${row.plcAddress}: ${(e as Error).message}`); }
         } else {
-          // Update existing
           try {
-            await updateS7Mapping(row.id, {
-              plcAddress: row.plcAddress.trim(),
-              nodeId: row.nodeId,
-              description: row.description.trim() || undefined,
-            });
-          } catch (e) {
-            errors.push(`${row.plcAddress}: ${(e as Error).message}`);
-          }
+            await updateS7Mapping(row.id, { plcAddress: row.plcAddress.trim(), nodeId: row.nodeId, description: row.description.trim() || undefined });
+          } catch (e) { errors.push(`${row.plcAddress}: ${(e as Error).message}`); }
         }
       }
-
       if (errors.length > 0) throw new Error(errors.join('\n'));
     },
     onSuccess: () => {
@@ -220,22 +169,19 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
 
   return (
     <div className="border-t border-gray-200">
-      {/* Header */}
       <div className="px-6 py-3 flex items-center justify-between bg-gray-50 border-b border-gray-100">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
           Variable Mappings ({mappings.length})
         </span>
         <div className="flex gap-2">
-          <button onClick={() => setShowBulk(!showBulk)} className="text-xs text-gray-600 hover:text-blue-700 px-2 py-1 rounded border border-gray-300 hover:border-blue-400 bg-white">
+          <Button variant="secondary" size="xs" onClick={() => setShowBulk(!showBulk)}>
             {showBulk ? 'Cancel' : '📋 Bulk Import'}
-          </button>
-          <button onClick={addBlankRow} className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded font-medium">
-            + Add Row
-          </button>
+          </Button>
+          <Button size="xs" onClick={addBlankRow}>+ Add Row</Button>
           {hasDirtyRows && (
-            <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="text-xs text-white bg-green-600 hover:bg-green-700 px-2 py-1 rounded font-medium disabled:opacity-50">
-              {saveMut.isPending ? 'Saving...' : '💾 Save All'}
-            </button>
+            <Button variant="success" size="xs" onClick={() => saveMut.mutate()} loading={saveMut.isPending}>
+              💾 Save All
+            </Button>
           )}
         </div>
       </div>
@@ -243,7 +189,6 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
       {error && <div className="px-6 py-2 bg-red-50 border-b border-red-100"><p className="text-xs text-red-600 whitespace-pre-line">{error}</p></div>}
       {successMsg && <div className="px-6 py-2 bg-green-50 border-b border-green-100"><p className="text-xs text-green-700">✓ {successMsg}</p></div>}
 
-      {/* Bulk import */}
       {showBulk && (
         <div className="px-6 py-4 border-b border-gray-100 bg-blue-50/40">
           <form onSubmit={handleBulk} className="space-y-3">
@@ -252,14 +197,13 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
             {bulkError && <p className="text-xs text-red-600">{bulkError}</p>}
             <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={4} placeholder={"DB1,REAL0,Temperature\nDB1,REAL4,Pressure"} className="w-full rounded border border-gray-300 px-2.5 py-1.5 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
             <div className="flex gap-2">
-              <button type="submit" disabled={bulkMut.isPending} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{bulkMut.isPending ? 'Importing...' : 'Import All'}</button>
-              <button type="button" onClick={() => { setShowBulk(false); setBulkError(''); }} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+              <Button size="sm" type="submit" loading={bulkMut.isPending}>Import All</Button>
+              <Button variant="secondary" size="sm" type="button" onClick={() => { setShowBulk(false); setBulkError(''); }}>Cancel</Button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Spreadsheet table */}
       {rows.length === 0 && !showBulk ? (
         <div className="px-6 py-4">
           <p className="text-xs text-gray-400 italic">No variable mappings. Click "+ Add Row" to start.</p>
@@ -283,49 +227,27 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
               return (
                 <tr key={row.id ?? `new-${idx}`} className={`${row.dirty ? 'bg-yellow-50/50' : ''}`}>
                   <td className="pl-6 pr-2 py-1">
-                    <input
-                      type="text"
-                      value={row.plcAddress}
-                      onChange={(e) => updateRow(idx, 'plcAddress', e.target.value)}
-                      placeholder="DB1,REAL0"
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                    />
+                    <input type="text" value={row.plcAddress} onChange={(e) => updateRow(idx, 'plcAddress', e.target.value)} placeholder="DB1,REAL0" className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" />
                   </td>
                   <td className="px-2 py-1">
-                    <input
-                      type="text"
-                      value={row.description}
-                      onChange={(e) => updateRow(idx, 'description', e.target.value)}
-                      placeholder="Label..."
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                    />
+                    <input type="text" value={row.description} onChange={(e) => updateRow(idx, 'description', e.target.value)} placeholder="Label..." className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" />
                   </td>
                   <td className="px-2 py-1">
-                    <select
-                      value={row.nodeId}
-                      onChange={(e) => updateRow(idx, 'nodeId', e.target.value)}
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                    >
+                    <select value={row.nodeId} onChange={(e) => updateRow(idx, 'nodeId', e.target.value)} className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white">
                       <option value="">Select...</option>
                       {allNodes.map((n) => <option key={n.id} value={n.id}>{getNodePath(n)}</option>)}
                     </select>
                   </td>
                   <td className="px-2 py-1 text-center">
-                    {selectedNode && (
-                      <span className="inline-block rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600">{selectedNode.dataType}</span>
-                    )}
+                    {selectedNode && <span className="inline-block rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600">{selectedNode.dataType}</span>}
                   </td>
                   <td className="px-2 py-1 text-center">
                     {liveValue ? (
                       <span className={`inline-flex items-center gap-1 text-xs font-mono ${liveValue.quality === 'good' ? 'text-gray-900' : 'text-red-500'}`}>
                         <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${liveValue.quality === 'good' ? 'bg-green-500' : 'bg-red-500'}`} />
-                        {liveValue.value !== undefined && liveValue.value !== null
-                          ? String(liveValue.value)
-                          : <span className="text-gray-400 italic">—</span>}
+                        {liveValue.value !== undefined && liveValue.value !== null ? String(liveValue.value) : <span className="text-gray-400 italic">—</span>}
                       </span>
-                    ) : (
-                      <span className="text-gray-300 text-xs">—</span>
-                    )}
+                    ) : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-2 pr-6 py-1 text-center">
                     <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600 text-sm" title="Remove row">×</button>
@@ -337,11 +259,13 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
         </table>
       )}
 
-      {/* Delete confirmation */}
       {deleteConfirmId && (
         <div className="px-6 py-3 border-t border-gray-100">
           <ConfirmDialog
+            open={!!deleteConfirmId}
+            title="Delete Mapping?"
             message={`Delete mapping "${mappings.find((m) => m.id === deleteConfirmId)?.plcAddress}"?`}
+            variant="danger"
             onConfirm={() => deleteMut.mutate(deleteConfirmId)}
             onCancel={() => setDeleteConfirmId(null)}
           />
@@ -365,7 +289,6 @@ export function S7ConnectionManager() {
   const [importResult, setImportResult] = useState<S7MappingImportResult | null>(null);
   const [importError, setImportError] = useState('');
 
-  // Queries
   const { data: connections = [], isLoading } = useQuery<S7Connection[]>({ queryKey: ['s7-connections'], queryFn: getS7Connections });
   const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({ queryKey: ['s7-status'], queryFn: getS7Status, refetchInterval: 5000 });
   const { data: mappings = [] } = useQuery<S7MappingItem[]>({ queryKey: ['s7-mappings'], queryFn: getS7Mappings });
@@ -373,7 +296,6 @@ export function S7ConnectionManager() {
   const { data: allNodes = [] } = useQuery<OpcUaNode[]>({ queryKey: ['nodes'], queryFn: getNodes });
   const { data: namespaces = [] } = useQuery<Namespace[]>({ queryKey: ['namespaces'], queryFn: getNamespaces });
 
-  // Object node paths for hierarchy display
   const [objPaths, setObjPaths] = useState<Map<string, string>>(new Map());
   useEffect(() => {
     async function load() {
@@ -406,7 +328,6 @@ export function S7ConnectionManager() {
     return `${nsName} / ${node.name}`;
   }
 
-  // Mutations
   const createConnMut = useMutation({
     mutationFn: (d: ConnectionFormData) => createS7Connection({ name: d.name, host: d.host, rack: parseInt(d.rack), slot: parseInt(d.slot), pollingIntervalMs: parseInt(d.pollingIntervalMs), reconnectIntervalMs: parseInt(d.reconnectIntervalMs) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['s7-connections'] }); queryClient.invalidateQueries({ queryKey: ['s7-status'] }); resetConnForm(); },
@@ -448,159 +369,108 @@ export function S7ConnectionManager() {
         <p className="mt-1 text-sm text-gray-500">Manage Siemens S7 PLC connections and variable mappings.</p>
       </div>
 
-      {/* New Connection button + Import/Export */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {/* Export CSV */}
-          <button
-            onClick={async () => {
-              setIsExporting(true);
-              try {
-                const csv = await exportS7MappingsCsv();
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 's7-mappings.csv';
-                a.click();
-                URL.revokeObjectURL(url);
-              } catch (e) {
-                alert('Export failed: ' + (e instanceof Error ? e.message : 'Unknown error'));
-              } finally {
-                setIsExporting(false);
-              }
-            }}
-            disabled={isExporting}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
+          <Button variant="secondary" size="sm" onClick={async () => {
+            setIsExporting(true);
+            try {
+              const csv = await exportS7MappingsCsv();
+              downloadTextAsFile(csv, 's7-mappings.csv');
+            } catch (e) { alert('Export failed: ' + (e instanceof Error ? e.message : 'Unknown error')); }
+            finally { setIsExporting(false); }
+          }} disabled={isExporting}>
             {isExporting ? 'Exporting...' : '📥 Export Mappings CSV'}
-          </button>
-
-          {/* Import CSV */}
-          <label className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+          </Button>
+          <label className="inline-flex items-center justify-center gap-2 rounded-md font-medium px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 cursor-pointer shadow-sm">
             {isImporting ? 'Importing...' : '📤 Import Mappings CSV'}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              disabled={isImporting}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setIsImporting(true);
-                setImportResult(null);
-                setImportError('');
-                try {
-                  const text = await file.text();
-                  const result = await importS7MappingsCsv(text);
-                  setImportResult(result);
-                  queryClient.invalidateQueries({ queryKey: ['s7-mappings'] });
-                } catch (err) {
-                  setImportError(err instanceof Error ? err.message : 'Import failed');
-                } finally {
-                  setIsImporting(false);
-                  e.target.value = '';
-                }
-              }}
-            />
+            <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setIsImporting(true); setImportResult(null); setImportError('');
+              try { const text = await file.text(); const result = await importS7MappingsCsv(text); setImportResult(result); queryClient.invalidateQueries({ queryKey: ['s7-mappings'] }); }
+              catch (err) { setImportError(err instanceof Error ? err.message : 'Import failed'); }
+              finally { setIsImporting(false); e.target.value = ''; }
+            }} />
           </label>
         </div>
-
-        <button
-          onClick={() => { showConnForm ? resetConnForm() : setShowConnForm(true); }}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
+        <Button size="sm" onClick={() => { showConnForm ? resetConnForm() : setShowConnForm(true); }}>
           {showConnForm ? 'Cancel' : '+ New Connection'}
-        </button>
+        </Button>
       </div>
 
-      {/* Import results */}
       {importResult && (
-        <div className={`rounded-md border p-4 text-sm ${importResult.summary.failed > 0 ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'}`}>
-          <div className="flex items-center justify-between">
-            <p className={importResult.summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}>
-              Import complete: {importResult.summary.succeeded} succeeded, {importResult.summary.failed} failed out of {importResult.summary.total} rows.
-            </p>
-            <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-          </div>
+        <Alert variant={importResult.summary.failed > 0 ? 'warning' : 'success'} onDismiss={() => setImportResult(null)}>
+          Import complete: {importResult.summary.succeeded} succeeded, {importResult.summary.failed} failed out of {importResult.summary.total} rows.
           {importResult.summary.failed > 0 && (
-            <ul className="mt-2 space-y-0.5 text-xs text-yellow-700 max-h-32 overflow-y-auto">
+            <ul className="mt-2 space-y-0.5 text-xs max-h-32 overflow-y-auto">
               {importResult.results.filter((r) => !r.success).map((r) => (
                 <li key={r.row}>Row {r.row}{r.plcAddress ? ` (${r.plcAddress})` : ''}: {r.error}</li>
               ))}
             </ul>
           )}
-        </div>
+        </Alert>
       )}
-      {importError && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between">
-          <p>{importError}</p>
-          <button onClick={() => setImportError('')} className="text-red-400 hover:text-red-600">✕</button>
-        </div>
-      )}
+      {importError && <Alert variant="error" onDismiss={() => setImportError('')}>{importError}</Alert>}
 
-      {/* Connection Form */}
       {showConnForm && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">{editingConn ? 'Edit Connection' : 'New Connection'}</h3>
-          {connError && <p role="alert" className="text-sm text-red-600 mb-3">{connError}</p>}
+        <Card>
+          <CardHeader>{editingConn ? 'Edit Connection' : 'New Connection'}</CardHeader>
+          {connError && <Alert variant="error" className="mb-3">{connError}</Alert>}
           <form onSubmit={handleConnSubmit} aria-label={editingConn ? `Edit connection ${editingConn.name}` : 'New S7 connection'} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><label htmlFor="conn-name" className="block text-xs text-gray-600 mb-1">Name</label><input id="conn-name" type="text" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} placeholder="PLC-1" className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
-              <div><label htmlFor="conn-host" className="block text-xs text-gray-600 mb-1">Host</label><input id="conn-host" type="text" value={connForm.host} onChange={(e) => setConnForm({ ...connForm, host: e.target.value })} placeholder="192.168.1.10" className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
-              <div><label htmlFor="conn-rack" className="block text-xs text-gray-600 mb-1">Rack</label><input id="conn-rack" type="number" min="0" value={connForm.rack} onChange={(e) => setConnForm({ ...connForm, rack: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
-              <div><label htmlFor="conn-slot" className="block text-xs text-gray-600 mb-1">Slot</label><input id="conn-slot" type="number" min="0" value={connForm.slot} onChange={(e) => setConnForm({ ...connForm, slot: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
-              <div><label htmlFor="conn-polling" className="block text-xs text-gray-600 mb-1">Polling (ms)</label><input id="conn-polling" type="number" min="100" value={connForm.pollingIntervalMs} onChange={(e) => setConnForm({ ...connForm, pollingIntervalMs: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
-              <div><label htmlFor="conn-reconnect" className="block text-xs text-gray-600 mb-1">Reconnect (ms)</label><input id="conn-reconnect" type="number" min="1000" value={connForm.reconnectIntervalMs} onChange={(e) => setConnForm({ ...connForm, reconnectIntervalMs: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
+              <FormField id="conn-name" label="Name"><Input id="conn-name" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} placeholder="PLC-1" /></FormField>
+              <FormField id="conn-host" label="Host"><Input id="conn-host" value={connForm.host} onChange={(e) => setConnForm({ ...connForm, host: e.target.value })} placeholder="192.168.1.10" /></FormField>
+              <FormField id="conn-rack" label="Rack"><Input id="conn-rack" type="number" min={0} value={connForm.rack} onChange={(e) => setConnForm({ ...connForm, rack: e.target.value })} /></FormField>
+              <FormField id="conn-slot" label="Slot"><Input id="conn-slot" type="number" min={0} value={connForm.slot} onChange={(e) => setConnForm({ ...connForm, slot: e.target.value })} /></FormField>
+              <FormField id="conn-polling" label="Polling (ms)"><Input id="conn-polling" type="number" min={100} value={connForm.pollingIntervalMs} onChange={(e) => setConnForm({ ...connForm, pollingIntervalMs: e.target.value })} /></FormField>
+              <FormField id="conn-reconnect" label="Reconnect (ms)"><Input id="conn-reconnect" type="number" min={1000} value={connForm.reconnectIntervalMs} onChange={(e) => setConnForm({ ...connForm, reconnectIntervalMs: e.target.value })} /></FormField>
             </div>
             <div className="flex gap-2 pt-1">
-              <button type="submit" disabled={createConnMut.isPending || updateConnMut.isPending} className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {(createConnMut.isPending || updateConnMut.isPending) ? 'Saving...' : editingConn ? 'Update' : 'Create'}
-              </button>
-              <button type="button" onClick={resetConnForm} className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <Button type="submit" loading={createConnMut.isPending || updateConnMut.isPending}>
+                {editingConn ? 'Update' : 'Create'}
+              </Button>
+              <Button variant="secondary" type="button" onClick={resetConnForm}>Cancel</Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
-      {/* Connection Cards with embedded mappings */}
       {connections.length === 0 && !showConnForm ? (
         <p className="text-sm text-gray-500">No S7 connections configured.</p>
       ) : (
         connections.map((conn) => {
           const status = statuses.find((s) => s.connectionId === conn.id);
           const connMappings = mappings.filter((m) => m.connectionId === conn.id);
-
           return (
             <div key={conn.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {/* Connection header */}
               <div className="px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{conn.name}</p>
                     <p className="text-xs text-gray-500">{conn.host} · Rack {conn.rack} · Slot {conn.slot} · Poll {conn.pollingIntervalMs}ms</p>
                   </div>
-                  <StatusBadge state={status?.state ?? 'disconnected'} />
+                  <Badge variant={status?.state === 'connected' ? 'green' : status?.state === 'error' ? 'red' : 'gray'} dot>
+                    {status?.state ?? 'disconnected'}
+                  </Badge>
                   {status?.errorMessage && <span className="text-xs text-red-600">{status.errorMessage}</span>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => startEditConn(conn)} aria-label={`Edit connection ${conn.name}`} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
-                  <button onClick={() => setDeleteConnId(conn.id)} aria-label={`Delete connection ${conn.name}`} className="text-sm text-red-600 hover:text-red-800">Delete</button>
+                  <Button variant="ghost" size="sm" onClick={() => startEditConn(conn)}>Edit</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteConnId(conn.id)}>
+                    <span className="text-red-600">Delete</span>
+                  </Button>
                 </div>
               </div>
 
-              {/* Delete confirmation */}
-              {deleteConnId === conn.id && (
-                <div className="px-6 pb-3">
-                  <ConfirmDialog
-                    message={`Delete "${conn.name}" and all its mappings? This cannot be undone.`}
-                    onConfirm={() => deleteConnMut.mutate(conn.id)}
-                    onCancel={() => setDeleteConnId(null)}
-                  />
-                </div>
-              )}
+              <ConfirmDialog
+                open={deleteConnId === conn.id}
+                title={`Delete "${conn.name}"?`}
+                message="Delete this connection and all its mappings? This cannot be undone."
+                variant="danger"
+                onConfirm={() => deleteConnMut.mutate(conn.id)}
+                onCancel={() => setDeleteConnId(null)}
+              />
 
-              {/* Mappings for this connection */}
               <ConnectionMappings
                 connection={conn}
                 mappings={connMappings}

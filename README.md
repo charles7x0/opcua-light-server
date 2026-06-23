@@ -34,7 +34,7 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
 - **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
 - **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
 - **S7 PLC Integration** — Connect to Siemens S7 PLCs, map PLC variables to OPC UA nodes with automatic polling and reconnection
-- **Web Dashboard** — Real-time server status, uptime, connected client count
+- **Web Dashboard** — Real-time server status, uptime, connected client count, and per-client session details (app name, security policy, address, connection duration, state)
 - **Authentication** — API key or JWT protection on mutating endpoints
 
 ## Prerequisites
@@ -129,6 +129,42 @@ export JWT_SECRET=your-secret
 export JWT_ISSUER=your-issuer
 ```
 
+### OPC UA Security Modes
+
+The security mode controls transport-level security between OPC UA clients and the open62541 runtime. It does **not** affect the REST API, which always runs on plain HTTP.
+
+| Mode | Signing | Encryption | Use Case |
+|------|---------|------------|----------|
+| **None** | ✗ | ✗ | Development, local testing, trusted network segments |
+| **Sign** | ✓ | ✗ | Physically isolated networks where tamper detection is needed but eavesdropping is acceptable |
+| **SignAndEncrypt** | ✓ | ✓ | Production / untrusted networks — full confidentiality and integrity |
+
+**How it works:**
+
+- Configure via `PUT /api/security/policy` or the web UI Security Settings panel.
+- When set to **Sign** or **SignAndEncrypt**, the server requires a certificate and private key. Generate a self-signed certificate through the API (`POST /api/security/generate`) or upload paths to existing files (`POST /api/security/certificate`).
+- The C runtime enforces the selected policy at the open62541 level — clients that don't meet the security requirement are rejected.
+- Certificate health (days until expiry) is monitored and displayed in the web UI status bar.
+
+**Certificate management:**
+
+```bash
+# Generate a self-signed certificate with SAN entries
+curl -X POST http://localhost:3100/api/security/generate \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"dns": ["myserver.local"], "ips": ["192.168.1.10"]}'
+
+# Download the certificate in DER or PEM format
+curl http://localhost:3100/api/security/certificate/download?format=pem -o server.pem
+
+# Set security mode to SignAndEncrypt
+curl -X PUT http://localhost:3100/api/security/policy \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "SignAndEncrypt"}'
+```
+
 ## API Reference
 
 ### Nodes
@@ -140,6 +176,8 @@ export JWT_ISSUER=your-issuer
 | GET | `/api/nodes/:id` | Get a node |
 | PUT | `/api/nodes/:id` | Update a node |
 | DELETE | `/api/nodes/:id` | Delete a node |
+| GET | `/api/nodes/export/csv` | Export all nodes as CSV |
+| POST | `/api/nodes/import/csv` | Import nodes from CSV |
 
 ### Namespaces
 
@@ -166,6 +204,7 @@ export JWT_ISSUER=your-issuer
 | POST | `/api/server/stop` | Stop the OPC UA runtime |
 | POST | `/api/server/reload` | Reload address space config |
 | GET | `/api/server/status` | Get status (unauthenticated) |
+| GET | `/api/server/clients` | List connected client sessions (unauthenticated) |
 
 ### Security
 
@@ -186,6 +225,7 @@ export JWT_ISSUER=your-issuer
 | GET | `/api/s7/mappings` | List mappings |
 | DELETE | `/api/s7/mappings/:id` | Delete mapping |
 | GET | `/api/s7/status` | Get connection statuses |
+| GET | `/api/s7/values` | Get last-read values for all mapped variables |
 
 ## Project Structure
 

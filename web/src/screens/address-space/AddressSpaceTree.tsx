@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getNamespaces, getObjectNodeTree, getNodes, createObjectNode, deleteObjectNode, Namespace, ObjectNode, OpcUaNode, ApiError } from '../api';
+import { getNamespaces, getObjectNodeTree, getNodes, createObjectNode, deleteObjectNode, Namespace, ObjectNode, OpcUaNode, ApiError } from '../../api';
 
 export interface SelectedNode {
   node: OpcUaNode;

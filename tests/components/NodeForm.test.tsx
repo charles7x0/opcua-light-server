@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NodeForm } from '../../web/src/components/NodeForm';
+import { NodeForm } from '../../web/src/screens/address-space/NodeForm';
 import { ApiError } from '../../web/src/api';
 
 // Mock the API module

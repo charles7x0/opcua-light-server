@@ -7,7 +7,8 @@ import {
   deleteNamespace,
   ApiError,
   type Namespace,
-} from '../api';
+} from '../../api';
+import { Button, Input, FormField, Alert, ConfirmDialog } from '../../components';
 
 interface FieldErrors {
   [field: string]: string;
@@ -159,15 +160,7 @@ export function NamespaceManager() {
     }
   }
 
-  function confirmDelete(id: string) {
-    setDeleteConfirmId(id);
-  }
-
-  function executeDelete() {
-    if (deleteConfirmId) {
-      deleteMutation.mutate(deleteConfirmId);
-    }
-  }
+  const deleteTarget = namespaces.find((ns) => ns.id === deleteConfirmId);
 
   if (isLoading) {
     return (
@@ -180,19 +173,14 @@ export function NamespaceManager() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Namespaces</h2>
         {!showForm && (
-          <button
-            onClick={startCreate}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
+          <Button size="sm" onClick={startCreate}>
             Add Namespace
-          </button>
+          </Button>
         )}
       </div>
 
       {generalError && !showForm && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
-          {generalError}
-        </div>
+        <Alert variant="error">{generalError}</Alert>
       )}
 
       {/* Namespace list */}
@@ -215,52 +203,31 @@ export function NamespaceManager() {
                 <span className="text-xs text-gray-500">
                   {ns.nodeCount ?? 0} node{(ns.nodeCount ?? 0) !== 1 ? 's' : ''}
                 </span>
-                <button
-                  onClick={() => startEdit(ns)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
+                <Button variant="ghost" size="sm" onClick={() => startEdit(ns)}>
                   Edit
-                </button>
-                <button
-                  onClick={() => confirmDelete(ns.id)}
-                  className="text-sm text-red-600 hover:text-red-800"
-                >
-                  Delete
-                </button>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(ns.id)}>
+                  <span className="text-red-600">Delete</span>
+                </Button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
-      {deleteConfirmId && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-medium text-red-800">
-            Delete this namespace?
-          </p>
-          <p className="mt-1 text-sm text-red-700">
-            This will permanently delete the namespace and all its object nodes and variable nodes.
-            This action cannot be undone.
-          </p>
-          <div className="mt-3 flex gap-3">
-            <button
-              onClick={executeDelete}
-              disabled={deleteMutation.isPending}
-              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete'}
-            </button>
-            <button
-              onClick={() => setDeleteConfirmId(null)}
-              disabled={deleteMutation.isPending}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete this namespace?"
+        message={`This will permanently delete "${deleteTarget?.name ?? ''}" and all its object nodes and variable nodes. This action cannot be undone.`}
+        confirmLabel={deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete'}
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
+        }}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
 
       {/* Create/Edit form */}
       {showForm && (
@@ -269,95 +236,49 @@ export function NamespaceManager() {
             {editingNamespace ? 'Edit Namespace' : 'New Namespace'}
           </h3>
 
-          {generalError && (
-            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
-              {generalError}
-            </div>
-          )}
+          {generalError && <Alert variant="error">{generalError}</Alert>}
 
-          {/* Name field */}
-          <div>
-            <label htmlFor="ns-name" className="block text-sm font-medium text-gray-700">
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
+          <FormField id="ns-name" label="Name" required error={fieldErrors.name}>
+            <Input
               id="ns-name"
-              type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
-                fieldErrors.name
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-              }`}
+              error={!!fieldErrors.name}
               placeholder="e.g., PlantFloor"
+              aria-required="true"
+              aria-describedby={fieldErrors.name ? 'ns-name-error' : undefined}
             />
-            {fieldErrors.name && (
-              <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>
-            )}
-          </div>
+          </FormField>
 
-          {/* URI field */}
-          <div>
-            <label htmlFor="ns-uri" className="block text-sm font-medium text-gray-700">
-              URI <span className="text-red-500">*</span>
-            </label>
-            <input
+          <FormField id="ns-uri" label="URI" required error={fieldErrors.uri}>
+            <Input
               id="ns-uri"
-              type="text"
               value={formData.uri}
               onChange={(e) => setFormData({ ...formData, uri: e.target.value })}
-              className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
-                fieldErrors.uri
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-              }`}
+              error={!!fieldErrors.uri}
               placeholder="e.g., urn:opcua-light:PlantFloor"
+              aria-required="true"
+              aria-describedby={fieldErrors.uri ? 'ns-uri-error' : undefined}
             />
-            {fieldErrors.uri && (
-              <p className="mt-1 text-sm text-red-600">{fieldErrors.uri}</p>
-            )}
-          </div>
+          </FormField>
 
-          {/* Description field */}
-          <div>
-            <label htmlFor="ns-description" className="block text-sm font-medium text-gray-700">
-              Description
-            </label>
-            <input
+          <FormField id="ns-description" label="Description" error={fieldErrors.description}>
+            <Input
               id="ns-description"
-              type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               placeholder="Optional description"
             />
-            {fieldErrors.description && (
-              <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
-            )}
-          </div>
+          </FormField>
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting
-                ? 'Saving...'
-                : editingNamespace
-                  ? 'Update Namespace'
-                  : 'Create Namespace'}
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              disabled={isSubmitting}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            >
+            <Button type="submit" loading={isSubmitting}>
+              {editingNamespace ? 'Update Namespace' : 'Create Namespace'}
+            </Button>
+            <Button variant="secondary" type="button" onClick={resetForm} disabled={isSubmitting}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}

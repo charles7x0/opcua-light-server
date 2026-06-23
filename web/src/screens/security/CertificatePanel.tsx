@@ -7,7 +7,8 @@ import {
   deletePkiCertificate,
   PkiCertificate,
   ApiError,
-} from '../api';
+} from '../../api';
+import { Badge, Button, Card, CardHeader, ConfirmDialog, Alert } from '../../components';
 
 function formatDate(isoDate: string): string {
   const date = new Date(isoDate);
@@ -15,21 +16,6 @@ function formatDate(isoDate: string): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function StatusBadge({ status }: { status: PkiCertificate['status'] }): JSX.Element {
-  if (status === 'trusted') {
-    return (
-      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-        Trusted
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-      Rejected
-    </span>
-  );
 }
 
 export function CertificatePanel(): JSX.Element {
@@ -50,9 +36,7 @@ export function CertificatePanel(): JSX.Element {
       queryClient.invalidateQueries({ queryKey: ['pki-certificates'] });
     },
     onError: (err: Error) => {
-      setActionError(
-        err instanceof ApiError ? err.message : 'Failed to reject certificate'
-      );
+      setActionError(err instanceof ApiError ? err.message : 'Failed to reject certificate');
     },
   });
 
@@ -63,9 +47,7 @@ export function CertificatePanel(): JSX.Element {
       queryClient.invalidateQueries({ queryKey: ['pki-certificates'] });
     },
     onError: (err: Error) => {
-      setActionError(
-        err instanceof ApiError ? err.message : 'Failed to trust certificate'
-      );
+      setActionError(err instanceof ApiError ? err.message : 'Failed to trust certificate');
     },
   });
 
@@ -78,61 +60,43 @@ export function CertificatePanel(): JSX.Element {
     },
     onError: (err: Error) => {
       setConfirmingDelete(null);
-      setActionError(
-        err instanceof ApiError ? err.message : 'Failed to delete certificate'
-      );
+      setActionError(err instanceof ApiError ? err.message : 'Failed to delete certificate');
     },
   });
 
-  const handleDeleteClick = (thumbprint: string): void => {
-    setConfirmingDelete(thumbprint);
-  };
-
-  const handleConfirmDelete = (): void => {
-    if (confirmingDelete) {
-      deleteMutation.mutate(confirmingDelete);
-    }
-  };
-
-  const handleCancelDelete = (): void => {
-    setConfirmingDelete(null);
-  };
-
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Client Certificates</h3>
+      <Card>
+        <CardHeader>Client Certificates</CardHeader>
         <p className="text-sm text-gray-500">Loading certificates...</p>
-      </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Client Certificates</h3>
-        <p className="text-sm text-red-600">
+      <Card>
+        <CardHeader>Client Certificates</CardHeader>
+        <Alert variant="error">
           Failed to load certificates: {error instanceof Error ? error.message : 'Unknown error'}
-        </p>
-      </div>
+        </Alert>
+      </Card>
     );
   }
 
   if (!certificates || certificates.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Client Certificates</h3>
+      <Card>
+        <CardHeader>Client Certificates</CardHeader>
         <p className="text-sm text-gray-500">No client certificates have been received yet.</p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-sm font-medium text-gray-900 mb-4">Client Certificates</h3>
-      {actionError && (
-        <p className="mb-3 text-sm text-red-600">{actionError}</p>
-      )}
+    <Card>
+      <CardHeader>Client Certificates</CardHeader>
+      {actionError && <Alert variant="error" className="mb-3">{actionError}</Alert>}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
@@ -164,7 +128,9 @@ export function CertificatePanel(): JSX.Element {
                   {cert.subject}
                 </td>
                 <td className="px-3 py-2">
-                  <StatusBadge status={cert.status} />
+                  <Badge variant={cert.status === 'trusted' ? 'green' : 'red'}>
+                    {cert.status === 'trusted' ? 'Trusted' : 'Rejected'}
+                  </Badge>
                 </td>
                 <td className="px-3 py-2 text-sm text-gray-700">
                   {formatDate(cert.notAfter)}
@@ -172,33 +138,36 @@ export function CertificatePanel(): JSX.Element {
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     {cert.status === 'trusted' && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => rejectMutation.mutate(cert.thumbprint)}
                         disabled={rejectMutation.isPending}
-                        className="rounded-md bg-orange-100 px-2.5 py-1 text-xs font-medium text-orange-800 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-orange-800 bg-orange-100 hover:bg-orange-200 border-none"
                       >
                         Reject
-                      </button>
+                      </Button>
                     )}
                     {cert.status === 'rejected' && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => trustMutation.mutate(cert.thumbprint)}
                         disabled={trustMutation.isPending}
-                        className="rounded-md bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-green-800 bg-green-100 hover:bg-green-200 border-none"
                       >
                         Trust
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(cert.thumbprint)}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setConfirmingDelete(cert.thumbprint)}
                       disabled={deleteMutation.isPending}
-                      className="rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-red-800 bg-red-100 hover:bg-red-200 border-none"
                     >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -207,41 +176,18 @@ export function CertificatePanel(): JSX.Element {
         </table>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      {confirmingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={handleCancelDelete}
-          />
-          <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Delete Certificate?
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Are you sure you want to delete certificate{' '}
-              <span className="font-mono">{confirmingDelete.slice(0, 16)}...</span>?
-            </p>
-            <div className="mt-4 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCancelDelete}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={deleteMutation.isPending}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      <ConfirmDialog
+        open={!!confirmingDelete}
+        title="Delete Certificate?"
+        message={`Are you sure you want to delete certificate ${confirmingDelete?.slice(0, 16) ?? ''}...?`}
+        confirmLabel={deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (confirmingDelete) deleteMutation.mutate(confirmingDelete);
+        }}
+        onCancel={() => setConfirmingDelete(null)}
+      />
+    </Card>
   );
 }

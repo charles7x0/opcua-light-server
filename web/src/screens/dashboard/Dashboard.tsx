@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients, ServerStatus } from '../api';
+import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients, ServerStatus } from '../../api';
 import { ConnectedClientsTable } from './ConnectedClientsTable';
+import { Button, Alert, Card } from '../../components';
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -81,17 +82,17 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div role="status" aria-live="polite" className="rounded-lg border border-gray-200 bg-white p-6">
-        <p className="text-gray-500">Loading server status...</p>
-      </div>
+      <Card>
+        <p className="text-gray-500" role="status" aria-live="polite">Loading server status...</p>
+      </Card>
     );
   }
 
   if (isError || !status) {
     return (
-      <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-6">
-        <p className="text-red-700">Failed to fetch server status. Is the Control API running?</p>
-      </div>
+      <Alert variant="error">
+        Failed to fetch server status. Is the Control API running?
+      </Alert>
     );
   }
 
@@ -102,7 +103,7 @@ export function Dashboard() {
       <h2 className="text-lg font-semibold text-gray-900">Server Dashboard</h2>
 
       {/* Status Card */}
-      <div className={`rounded-lg border p-6 ${config.bgColor}`}>
+      <div className={`rounded-lg border p-6 ${config.bgColor}`} role="status" aria-live="polite" aria-atomic="true">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className={`inline-block h-3 w-3 rounded-full ${config.dotColor}`} aria-hidden="true" />
@@ -116,14 +117,14 @@ export function Dashboard() {
         {/* Uptime and Clients - shown when running */}
         {status.state === 'running' && (
           <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="rounded-md bg-white p-3 border border-gray-100">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Uptime</p>
+            <div className="rounded-md bg-white p-3 border border-gray-100" aria-label="Uptime">
+              <p className="text-xs text-gray-500 uppercase tracking-wide" aria-hidden="true">Uptime</p>
               <p className="mt-1 text-lg font-medium text-gray-900">
                 {status.uptime != null ? formatUptime(status.uptime) : '—'}
               </p>
             </div>
-            <div className="rounded-md bg-white p-3 border border-gray-100">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Connected Clients</p>
+            <div className="rounded-md bg-white p-3 border border-gray-100" aria-label="Connected Clients">
+              <p className="text-xs text-gray-500 uppercase tracking-wide" aria-hidden="true">Connected Clients</p>
               <p className="mt-1 text-lg font-medium text-gray-900">
                 {status.connectedClients ?? 0}
               </p>
@@ -133,7 +134,7 @@ export function Dashboard() {
 
         {/* Error message */}
         {status.state === 'error' && status.lastError && (
-          <p className="mt-3 text-sm text-red-600">{status.lastError}</p>
+          <p className="mt-3 text-sm text-red-600" role="alert">{status.lastError}</p>
         )}
       </div>
 
@@ -146,43 +147,45 @@ export function Dashboard() {
       )}
 
       {/* Control Buttons */}
-      <div className="flex gap-3">
-        <button
+      <div className="flex gap-3" role="group" aria-label="Server controls">
+        <Button
+          variant="success"
           onClick={() => startMutation.mutate()}
           disabled={status.state === 'running' || isMutating}
-          className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          loading={startMutation.isPending}
         >
-          {startMutation.isPending ? 'Starting...' : 'Start'}
-        </button>
-        <button
+          Start
+        </Button>
+        <Button
+          variant="danger"
           onClick={() => stopMutation.mutate()}
           disabled={status.state === 'stopped' || isMutating}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          loading={stopMutation.isPending}
         >
-          {stopMutation.isPending ? 'Stopping...' : 'Stop'}
-        </button>
-        <button
+          Stop
+        </Button>
+        <Button
           onClick={() => reloadMutation.mutate()}
           disabled={status.state !== 'running' || isMutating}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          loading={reloadMutation.isPending}
         >
-          {reloadMutation.isPending ? 'Reloading...' : 'Reload'}
-        </button>
+          Reload
+        </Button>
       </div>
 
       {/* Mutation feedback */}
       <div aria-live="polite" aria-atomic="true">
         {startMutation.isError && (
-          <p role="alert" className="text-sm text-red-600">Failed to start server: {startMutation.error.message}</p>
+          <Alert variant="error">Failed to start server: {startMutation.error.message}</Alert>
         )}
         {stopMutation.isError && (
-          <p role="alert" className="text-sm text-red-600">Failed to stop server: {stopMutation.error.message}</p>
+          <Alert variant="error">Failed to stop server: {stopMutation.error.message}</Alert>
         )}
         {reloadMutation.isError && (
-          <p role="alert" className="text-sm text-red-600">Failed to reload server: {reloadMutation.error.message}</p>
+          <Alert variant="error">Failed to reload server: {reloadMutation.error.message}</Alert>
         )}
         {reloadMutation.isSuccess && (
-          <p className="text-sm text-green-600">Server configuration reloaded successfully.</p>
+          <Alert variant="success">Server configuration reloaded successfully.</Alert>
         )}
       </div>
     </div>

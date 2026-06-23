@@ -1,11 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-10T17:21:07.539Z",
+  "generatedAt": "2026-06-23T16:11:38.051Z",
   "security": {
     "mode": "SignAndEncrypt",
     "certificatePath": "J:\\Projects\\opcua-light-server\\data\\certs\\server.der",
     "privateKeyPath": "J:\\Projects\\opcua-light-server\\data\\certs\\server.key",
-    "applicationUri": "urn:opcua-light-server:application"
+    "applicationUri": "urn:opcua-light-server:application",
+    "pkiTrustedPath": "J:\\Projects\\opcua-light-server\\data\\pki\\trusted",
+    "pkiRejectedPath": "J:\\Projects\\opcua-light-server\\data\\pki\\rejected"
   },
   "namespaces": [
     {

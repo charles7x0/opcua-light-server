@@ -9,8 +9,9 @@ import {
   browseFiles,
   SecurityConfig,
   ApiError,
-} from '../api';
+} from '../../api';
 import { CertificatePanel } from './CertificatePanel';
+import { Button, Input, Textarea, FormField, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
 
 const SECURITY_MODES = ['None', 'Sign', 'SignAndEncrypt'] as const;
 
@@ -35,9 +36,7 @@ function isValidIpv4(ip: string): boolean {
 
 function isValidIpv6(ip: string): boolean {
   const trimmed = ip.trim();
-  // Basic IPv6 check: contains colons and valid hex chars
   if (!trimmed.includes(':')) return false;
-  // Allow compressed form (::) and full form
   const parts = trimmed.split(':');
   if (parts.length < 2 || parts.length > 8) return false;
   const hasDoubleColon = trimmed.includes('::');
@@ -97,11 +96,7 @@ export function SecuritySettings() {
       setPolicyError(null);
     },
     onError: (err: Error) => {
-      if (err instanceof ApiError) {
-        setPolicyError(err.message);
-      } else {
-        setPolicyError('Failed to update security policy');
-      }
+      setPolicyError(err instanceof ApiError ? err.message : 'Failed to update security policy');
     },
   });
 
@@ -114,17 +109,12 @@ export function SecuritySettings() {
       setUploadError(null);
     },
     onError: (err: Error) => {
-      if (err instanceof ApiError) {
-        setUploadError(err.message);
-      } else {
-        setUploadError('Failed to upload certificate');
-      }
+      setUploadError(err instanceof ApiError ? err.message : 'Failed to upload certificate');
     },
   });
 
   const generateMutation = useMutation({
-    mutationFn: (options: Parameters<typeof generateCertificate>[0]) =>
-      generateCertificate(options),
+    mutationFn: (options: Parameters<typeof generateCertificate>[0]) => generateCertificate(options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security'] });
       setDnsNamesInput('');
@@ -136,11 +126,7 @@ export function SecuritySettings() {
     },
     onError: (err: Error) => {
       setGenerateSuccess(false);
-      if (err instanceof ApiError) {
-        setGenerateError(err.message);
-      } else {
-        setGenerateError('Failed to generate certificate');
-      }
+      setGenerateError(err instanceof ApiError ? err.message : 'Failed to generate certificate');
     },
   });
 
@@ -176,7 +162,7 @@ export function SecuritySettings() {
       if (entries.length > MAX_SAN_ENTRIES) {
         errors.dnsNames = `Maximum ${MAX_SAN_ENTRIES} DNS entries allowed`;
       } else {
-        const invalid = entries.filter((e) => !isValidDnsName(e));
+        const invalid = entries.filter((entry) => !isValidDnsName(entry));
         if (invalid.length > 0) {
           errors.dnsNames = `Invalid DNS name(s): ${invalid.join(', ')}`;
         }
@@ -188,7 +174,7 @@ export function SecuritySettings() {
       if (entries.length > MAX_SAN_ENTRIES) {
         errors.ipAddresses = `Maximum ${MAX_SAN_ENTRIES} IP entries allowed`;
       } else {
-        const invalid = entries.filter((e) => !isValidIpAddress(e));
+        const invalid = entries.filter((entry) => !isValidIpAddress(entry));
         if (invalid.length > 0) {
           errors.ipAddresses = `Invalid IP address(es): ${invalid.join(', ')}`;
         }
@@ -202,18 +188,12 @@ export function SecuritySettings() {
     const options: Parameters<typeof generateCertificate>[0] = {};
 
     const dnsEntries = parseMultiInput(dnsNamesInput);
-    if (dnsEntries.length > 0) {
-      options.dnsNames = dnsEntries;
-    }
+    if (dnsEntries.length > 0) options.dnsNames = dnsEntries;
 
     const ipEntries = parseMultiInput(ipAddressesInput);
-    if (ipEntries.length > 0) {
-      options.ipAddresses = ipEntries;
-    }
+    if (ipEntries.length > 0) options.ipAddresses = ipEntries;
 
-    if (force) {
-      options.force = true;
-    }
+    if (force) options.force = true;
 
     return options;
   };
@@ -226,26 +206,14 @@ export function SecuritySettings() {
     const errors = validateGenerateForm();
     setGenerateErrors(errors);
 
-    if (Object.keys(errors).length > 0) {
-      return;
-    }
+    if (Object.keys(errors).length > 0) return;
 
-    // If a certificate already exists, show confirmation dialog
     if (config?.certificatePath) {
       setShowConfirmDialog(true);
       return;
     }
 
     generateMutation.mutate(buildGenerateOptions());
-  };
-
-  const handleConfirmOverwrite = () => {
-    setShowConfirmDialog(false);
-    generateMutation.mutate(buildGenerateOptions(true));
-  };
-
-  const handleCancelOverwrite = () => {
-    setShowConfirmDialog(false);
   };
 
   const handleDownloadCertificate = async () => {
@@ -260,9 +228,7 @@ export function SecuritySettings() {
       a.click();
       document.body.removeChild(a);
     } catch (err) {
-      setDownloadError(
-        err instanceof Error ? err.message : 'Failed to download certificate'
-      );
+      setDownloadError(err instanceof Error ? err.message : 'Failed to download certificate');
     } finally {
       setIsDownloading(false);
     }
@@ -279,10 +245,9 @@ export function SecuritySettings() {
   if (fetchError) {
     return (
       <div className="p-6">
-        <p className="text-red-600">
-          Failed to load security configuration:{' '}
-          {fetchError instanceof Error ? fetchError.message : 'Unknown error'}
-        </p>
+        <Alert variant="error">
+          Failed to load security configuration: {fetchError instanceof Error ? fetchError.message : 'Unknown error'}
+        </Alert>
       </div>
     );
   }
@@ -297,89 +262,73 @@ export function SecuritySettings() {
       </div>
 
       {/* Security Mode Selection */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Security Mode</h3>
-        {policyError && (
-          <p className="mb-3 text-sm text-red-600">{policyError}</p>
-        )}
-        <div className="space-y-2">
-          {SECURITY_MODES.map((mode) => (
-            <label
-              key={mode}
-              className="flex items-center gap-3 cursor-pointer"
-            >
-              <input
-                type="radio"
-                name="securityMode"
-                value={mode}
-                checked={config?.mode === mode}
-                onChange={() => policyMutation.mutate(mode)}
-                disabled={policyMutation.isPending}
-                className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700">{mode}</span>
-            </label>
-          ))}
-        </div>
+      <Card>
+        <CardHeader>Security Mode</CardHeader>
+        {policyError && <Alert variant="error" className="mb-3">{policyError}</Alert>}
+        <fieldset>
+          <legend className="sr-only">Security Mode</legend>
+          <div className="space-y-2">
+            {SECURITY_MODES.map((mode) => (
+              <label key={mode} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="securityMode"
+                  value={mode}
+                  checked={config?.mode === mode}
+                  onChange={() => policyMutation.mutate(mode)}
+                  disabled={policyMutation.isPending}
+                  className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">{mode}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
         {policyMutation.isPending && (
           <p className="mt-2 text-xs text-gray-500">Updating policy...</p>
         )}
-      </div>
+      </Card>
 
       {/* Certificate Expiry */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Certificate Expiry</h3>
+      <Card>
+        <CardHeader>Certificate Expiry</CardHeader>
         {config?.certificateExpiresAt != null && config?.certificateRemainingDays != null ? (
-          <div className="space-y-2">
+          <dl className="space-y-2">
             <div className="flex items-center gap-2">
               <dt className="text-sm text-gray-500">Remaining Days:</dt>
               <dd>
                 {config.certificateRemainingDays === 0 ? (
                   <span className="text-sm font-semibold text-red-600">Expired</span>
                 ) : config.certificateRemainingDays < 30 ? (
-                  <span className="text-sm font-semibold text-red-600">
-                    {config.certificateRemainingDays}
-                  </span>
+                  <span className="text-sm font-semibold text-red-600">{config.certificateRemainingDays}</span>
                 ) : config.certificateRemainingDays <= 90 ? (
-                  <span className="text-sm font-semibold text-yellow-600">
-                    {config.certificateRemainingDays}
-                  </span>
+                  <span className="text-sm font-semibold text-yellow-600">{config.certificateRemainingDays}</span>
                 ) : (
-                  <span className="text-sm font-semibold text-green-600">
-                    {config.certificateRemainingDays}
-                  </span>
+                  <span className="text-sm font-semibold text-green-600">{config.certificateRemainingDays}</span>
                 )}
               </dd>
             </div>
             <div className="flex items-center gap-2">
               <dt className="text-sm text-gray-500">Expires At:</dt>
-              <dd className="text-sm text-gray-700">
-                {config.certificateExpiresAt.split('T')[0]}
-              </dd>
+              <dd className="text-sm text-gray-700">{config.certificateExpiresAt.split('T')[0]}</dd>
             </div>
-          </div>
+          </dl>
         ) : (
           <p className="text-sm text-gray-500">No certificate expiry data available</p>
         )}
-      </div>
+      </Card>
 
       {/* Certificate Status */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Certificate Status</h3>
+      <Card>
+        <CardHeader>Certificate Status</CardHeader>
         <dl className="space-y-3">
           <div className="flex items-center gap-2">
             <dt className="text-sm text-gray-500">Certificate:</dt>
             <dd>
               {config?.certificatePath ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      config.certificateValid ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <span className="text-sm text-gray-700">
-                    {config.certificateValid ? 'Valid' : 'Invalid'}
-                  </span>
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${config.certificateValid ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="text-sm text-gray-700">{config.certificateValid ? 'Valid' : 'Invalid'}</span>
                 </span>
               ) : (
                 <span className="text-sm text-gray-400">Not configured</span>
@@ -391,7 +340,7 @@ export function SecuritySettings() {
             <dd>
               {config?.privateKeyConfigured ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full bg-green-500" />
                   <span className="text-sm text-gray-700">Configured</span>
                 </span>
               ) : (
@@ -402,9 +351,7 @@ export function SecuritySettings() {
           {config?.certificatePath && (
             <div className="flex items-start gap-2">
               <dt className="text-sm text-gray-500">Path:</dt>
-              <dd className="text-sm text-gray-700 font-mono break-all">
-                {config.certificatePath}
-              </dd>
+              <dd className="text-sm text-gray-700 font-mono break-all">{config.certificatePath}</dd>
             </div>
           )}
         </dl>
@@ -422,61 +369,28 @@ export function SecuritySettings() {
             <option value="pem">PEM</option>
           </select>
           {config?.certificatePath && config?.certificateValid && (
-            <button
-              type="button"
-              onClick={handleDownloadCertificate}
-              disabled={isDownloading}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDownloading && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              )}
-              {isDownloading ? 'Downloading...' : 'Download Certificate'}
-            </button>
+            <Button onClick={handleDownloadCertificate} loading={isDownloading}>
+              Download Certificate
+            </Button>
           )}
         </div>
-        {downloadError && (
-          <p className="mt-2 text-sm text-red-600">{downloadError}</p>
-        )}
-      </div>
+        {downloadError && <Alert variant="error" className="mt-2">{downloadError}</Alert>}
+      </Card>
 
       {/* Generate Certificate */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Generate Certificate</h3>
+      <Card>
+        <CardHeader>Generate Certificate</CardHeader>
         <form onSubmit={handleGenerateSubmit} className="space-y-4">
-          {generateError && (
-            <p className="text-sm text-red-600">{generateError}</p>
-          )}
-          {generateSuccess && (
-            <p className="text-sm text-green-600">Certificate generated successfully!</p>
-          )}
-          <div>
-            <label
-              htmlFor="dnsNames"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              DNS Names <span className="text-gray-400">(optional, comma-separated or one per line)</span>
-            </label>
-            <textarea
+          {generateError && <Alert variant="error">{generateError}</Alert>}
+          {generateSuccess && <Alert variant="success">Certificate generated successfully!</Alert>}
+
+          <FormField
+            id="dnsNames"
+            label="DNS Names"
+            description="Optional, comma-separated or one per line"
+            error={generateErrors.dnsNames}
+          >
+            <Textarea
               id="dnsNames"
               value={dnsNamesInput}
               onChange={(e) => {
@@ -487,24 +401,17 @@ export function SecuritySettings() {
               }}
               placeholder="server.example.com, opcua.local"
               rows={3}
-              className={`w-full rounded-md border px-3 py-2 text-sm focus:ring-1 ${
-                generateErrors.dnsNames
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-              }`}
+              error={!!generateErrors.dnsNames}
             />
-            {generateErrors.dnsNames && (
-              <p className="mt-1 text-xs text-red-600">{generateErrors.dnsNames}</p>
-            )}
-          </div>
-          <div>
-            <label
-              htmlFor="ipAddresses"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              IP Addresses <span className="text-gray-400">(optional, comma-separated or one per line)</span>
-            </label>
-            <textarea
+          </FormField>
+
+          <FormField
+            id="ipAddresses"
+            label="IP Addresses"
+            description="Optional, comma-separated or one per line"
+            error={generateErrors.ipAddresses}
+          >
+            <Textarea
               id="ipAddresses"
               value={ipAddressesInput}
               onChange={(e) => {
@@ -515,152 +422,74 @@ export function SecuritySettings() {
               }}
               placeholder="192.168.1.100, 10.0.0.1"
               rows={3}
-              className={`w-full rounded-md border px-3 py-2 text-sm focus:ring-1 ${
-                generateErrors.ipAddresses
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-              }`}
+              error={!!generateErrors.ipAddresses}
             />
-            {generateErrors.ipAddresses && (
-              <p className="mt-1 text-xs text-red-600">{generateErrors.ipAddresses}</p>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={generateMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {generateMutation.isPending && (
-              <svg
-                className="h-4 w-4 animate-spin"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            )}
+          </FormField>
+
+          <Button variant="success" type="submit" loading={generateMutation.isPending}>
             {generateMutation.isPending ? 'Generating...' : 'Generate Certificate'}
-          </button>
+          </Button>
         </form>
-      </div>
+      </Card>
 
       {/* Certificate Upload */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Upload Certificate</h3>
+      <Card>
+        <CardHeader>Upload Certificate</CardHeader>
         <form onSubmit={handleCertificateSubmit} className="space-y-4">
-          {uploadError && (
-            <p className="text-sm text-red-600">{uploadError}</p>
-          )}
-          <div>
-            <label
-              htmlFor="certificatePath"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              Certificate file path
-            </label>
+          {uploadError && <Alert variant="error">{uploadError}</Alert>}
+
+          <FormField id="certificatePath" label="Certificate file path">
             <div className="flex gap-2">
-              <input
+              <Input
                 id="certificatePath"
-                type="text"
                 value={certificatePath}
                 onChange={(e) => setCertificatePath(e.target.value)}
                 placeholder="/path/to/server.der"
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1"
               />
-              <button
-                type="button"
-                onClick={handleBrowseCertificate}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
+              <Button variant="secondary" type="button" onClick={handleBrowseCertificate}>
                 Browse
-              </button>
+              </Button>
             </div>
-          </div>
-          <div>
-            <label
-              htmlFor="privateKeyPath"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              Private key file path
-            </label>
+          </FormField>
+
+          <FormField id="privateKeyPath" label="Private key file path">
             <div className="flex gap-2">
-              <input
+              <Input
                 id="privateKeyPath"
-                type="text"
                 value={privateKeyPath}
                 onChange={(e) => setPrivateKeyPath(e.target.value)}
                 placeholder="/path/to/server.key"
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1"
               />
-              <button
-                type="button"
-                onClick={handleBrowsePrivateKey}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
+              <Button variant="secondary" type="button" onClick={handleBrowsePrivateKey}>
                 Browse
-              </button>
+              </Button>
             </div>
-          </div>
-          <button
-            type="submit"
-            disabled={certificateMutation.isPending}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {certificateMutation.isPending ? 'Uploading...' : 'Upload Certificate'}
-          </button>
+          </FormField>
+
+          <Button type="submit" loading={certificateMutation.isPending}>
+            Upload Certificate
+          </Button>
         </form>
-      </div>
+      </Card>
 
       {/* Client Certificate Trust Management */}
       <CertificatePanel />
 
       {/* Overwrite Confirmation Dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={handleCancelOverwrite}
-          />
-          <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Overwrite Existing Certificate?
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              A certificate already exists. Generating a new certificate will overwrite the
-              existing certificate and private key files. This action cannot be undone.
-            </p>
-            <div className="mt-4 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCancelOverwrite}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmOverwrite}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Overwrite Certificate
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showConfirmDialog}
+        title="Overwrite Existing Certificate?"
+        message="A certificate already exists. Generating a new certificate will overwrite the existing certificate and private key files. This action cannot be undone."
+        confirmLabel="Overwrite Certificate"
+        variant="danger"
+        onConfirm={() => {
+          setShowConfirmDialog(false);
+          generateMutation.mutate(buildGenerateOptions(true));
+        }}
+        onCancel={() => setShowConfirmDialog(false)}
+      />
     </div>
   );
 }
