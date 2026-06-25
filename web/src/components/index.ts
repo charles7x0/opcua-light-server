@@ -3,6 +3,7 @@ export { Input } from './Input';
 export { Textarea } from './Textarea';
 export { Select } from './Select';
 export { FormField } from './FormField';
+export { FileButton } from './FileButton';
 export { Card, CardHeader } from './Card';
 export { Alert } from './Alert';
 export { ConfirmDialog } from './ConfirmDialog';

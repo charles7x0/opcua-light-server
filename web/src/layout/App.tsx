@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Dashboard } from './screens/dashboard/Dashboard';
-import { AddressSpaceSection } from './screens/address-space/AddressSpaceSection';
-import { SecuritySettings } from './screens/security/SecuritySettings';
-import { S7ConnectionManager } from './screens/s7/S7ConnectionManager';
+import { Dashboard } from '../screens/dashboard/Dashboard';
+import { AddressSpaceSection } from '../screens/address-space/AddressSpaceSection';
+import { SecuritySettings } from '../screens/security/SecuritySettings';
+import { S7ConnectionManager } from '../screens/s7/S7ConnectionManager';
 import { StatusBar } from './StatusBar';
 
 type Section = 'dashboard' | 'address-space' | 'security' | 's7';

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StatusBar } from '../../web/src/StatusBar';
+import { StatusBar } from '../../web/src/layout/StatusBar';
 
 // Mock the API module
 vi.mock('../../web/src/api', () => ({

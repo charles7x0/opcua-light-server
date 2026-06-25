@@ -1,20 +1,18 @@
 import { TextareaHTMLAttributes, forwardRef } from 'react';
+import { type InputSize, getFieldClasses } from './styles';
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: boolean;
+  textareaSize?: InputSize;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ error, className = '', ...props }, ref) => {
+  ({ error, textareaSize = 'md', className = '', ...props }, ref) => {
     return (
       <textarea
         ref={ref}
         aria-invalid={error || undefined}
-        className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 ${
-          error
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-        } ${className}`}
+        className={`mt-1 ${getFieldClasses(textareaSize, error)} ${className}`}
         {...props}
       />
     );

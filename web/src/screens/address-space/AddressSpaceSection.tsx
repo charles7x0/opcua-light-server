@@ -5,7 +5,7 @@ import NodeDetailPanel from './NodeDetailPanel';
 import { NodeForm } from './NodeForm';
 import { NamespaceManager } from './NamespaceManager';
 import { deleteNode, exportNodesCsv, importNodesCsv, CsvImportResult } from '../../api';
-import { Button, Alert, ConfirmDialog } from '../../components';
+import { Button, Alert, ConfirmDialog, FileButton } from '../../components';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 
 function CreateNodeSplitButton({
@@ -180,20 +180,9 @@ export function AddressSpaceSection() {
             {isExporting ? 'Exporting...' : '📥 Export CSV'}
           </Button>
 
-          <label className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+          <FileButton accept=".csv,text/csv" disabled={isImporting} onFileSelect={handleImport}>
             {isImporting ? 'Importing...' : '📤 Import CSV'}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              disabled={isImporting}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImport(file);
-                e.target.value = '';
-              }}
-            />
-          </label>
+          </FileButton>
         </div>
       )}
 

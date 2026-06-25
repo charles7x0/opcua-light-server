@@ -11,7 +11,7 @@ import {
   ApiError,
 } from '../../api';
 import { CertificatePanel } from './CertificatePanel';
-import { Button, Input, Textarea, FormField, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
+import { Button, Input, Textarea, Select, FormField, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
 
 const SECURITY_MODES = ['None', 'Sign', 'SignAndEncrypt'] as const;
 
@@ -358,16 +358,16 @@ export function SecuritySettings() {
 
         {/* Download Certificate Controls */}
         <div className="mt-4 flex items-center gap-3">
-          <select
+          <Select
             value={downloadFormat}
             onChange={(e) => setDownloadFormat(e.target.value as 'der' | 'pem')}
             disabled={!config?.certificatePath || !config?.certificateValid}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Certificate format"
+            className="mt-0 w-auto"
           >
             <option value="der">DER</option>
             <option value="pem">PEM</option>
-          </select>
+          </Select>
           {config?.certificatePath && config?.certificateValid && (
             <Button onClick={handleDownloadCertificate} loading={isDownloading}>
               Download Certificate

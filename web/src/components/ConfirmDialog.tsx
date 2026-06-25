@@ -1,3 +1,5 @@
+import { Button } from './Button';
+
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
@@ -10,9 +12,9 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-const CONFIRM_VARIANTS = {
-  danger: 'bg-red-600 hover:bg-red-700',
-  warning: 'bg-yellow-600 hover:bg-yellow-700',
+const VARIANT_MAP: Record<'danger' | 'warning', 'danger' | 'success'> = {
+  danger: 'danger',
+  warning: 'success',
 };
 
 export function ConfirmDialog({
@@ -39,22 +41,12 @@ export function ConfirmDialog({
           {message}
         </p>
         <div className="mt-4 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
+          <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${CONFIRM_VARIANTS[variant]}`}
-          >
-            {loading ? 'Processing...' : confirmLabel}
-          </button>
+          </Button>
+          <Button variant={VARIANT_MAP[variant]} onClick={onConfirm} loading={loading}>
+            {confirmLabel}
+          </Button>
         </div>
       </div>
     </div>

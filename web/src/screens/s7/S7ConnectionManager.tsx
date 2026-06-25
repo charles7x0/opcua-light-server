@@ -27,7 +27,7 @@ import {
   Namespace,
   ApiError,
 } from '../../api';
-import { Button, Input, FormField, Badge, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
+import { Button, Input, FormField, Badge, Card, CardHeader, Alert, ConfirmDialog, FileButton, Select } from '../../components';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -227,16 +227,16 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
               return (
                 <tr key={row.id ?? `new-${idx}`} className={`${row.dirty ? 'bg-yellow-50/50' : ''}`}>
                   <td className="pl-6 pr-2 py-1">
-                    <input type="text" value={row.plcAddress} onChange={(e) => updateRow(idx, 'plcAddress', e.target.value)} placeholder="DB1,REAL0" className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" />
+                    <Input type="text" inputSize="xs" value={row.plcAddress} onChange={(e) => updateRow(idx, 'plcAddress', e.target.value)} placeholder="DB1,REAL0" className="mt-0 font-mono bg-white" />
                   </td>
                   <td className="px-2 py-1">
-                    <input type="text" value={row.description} onChange={(e) => updateRow(idx, 'description', e.target.value)} placeholder="Label..." className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" />
+                    <Input type="text" inputSize="xs" value={row.description} onChange={(e) => updateRow(idx, 'description', e.target.value)} placeholder="Label..." className="mt-0 bg-white" />
                   </td>
                   <td className="px-2 py-1">
-                    <select value={row.nodeId} onChange={(e) => updateRow(idx, 'nodeId', e.target.value)} className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white">
+                    <Select selectSize="xs" value={row.nodeId} onChange={(e) => updateRow(idx, 'nodeId', e.target.value)} className="mt-0 bg-white">
                       <option value="">Select...</option>
                       {allNodes.map((n) => <option key={n.id} value={n.id}>{getNodePath(n)}</option>)}
-                    </select>
+                    </Select>
                   </td>
                   <td className="px-2 py-1 text-center">
                     {selectedNode && <span className="inline-block rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600">{selectedNode.dataType}</span>}
@@ -381,17 +381,14 @@ export function S7ConnectionManager() {
           }} disabled={isExporting}>
             {isExporting ? 'Exporting...' : '📥 Export Mappings CSV'}
           </Button>
-          <label className="inline-flex items-center justify-center gap-2 rounded-md font-medium px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 cursor-pointer shadow-sm">
-            {isImporting ? 'Importing...' : '📤 Import Mappings CSV'}
-            <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
+          <FileButton accept=".csv,text/csv" disabled={isImporting} size="sm" onFileSelect={async (file) => {
               setIsImporting(true); setImportResult(null); setImportError('');
               try { const text = await file.text(); const result = await importS7MappingsCsv(text); setImportResult(result); queryClient.invalidateQueries({ queryKey: ['s7-mappings'] }); }
               catch (err) { setImportError(err instanceof Error ? err.message : 'Import failed'); }
-              finally { setIsImporting(false); e.target.value = ''; }
-            }} />
-          </label>
+              finally { setIsImporting(false); }
+          }}>
+            {isImporting ? 'Importing...' : '📤 Import Mappings CSV'}
+          </FileButton>
         </div>
         <Button size="sm" onClick={() => { showConnForm ? resetConnForm() : setShowConnForm(true); }}>
           {showConnForm ? 'Cancel' : '+ New Connection'}
