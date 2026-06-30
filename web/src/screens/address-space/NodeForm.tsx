@@ -288,7 +288,7 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 's7' }))}
-            className="text-blue-600 hover:text-blue-800 underline text-xs bg-transparent border-none cursor-pointer p-0"
+            className="text-primary-600 hover:text-primary-800 underline text-xs bg-transparent border-none cursor-pointer p-0"
           >
             Connect to S7 PLC variable
           </button>

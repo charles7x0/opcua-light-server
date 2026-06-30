@@ -186,16 +186,16 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
         </div>
       </div>
 
-      {error && <div className="px-6 py-2 bg-red-50 border-b border-red-100"><p className="text-xs text-red-600 whitespace-pre-line">{error}</p></div>}
-      {successMsg && <div className="px-6 py-2 bg-green-50 border-b border-green-100"><p className="text-xs text-green-700">✓ {successMsg}</p></div>}
+      {error && <div className="px-6 py-2 bg-danger-50 border-b border-danger-100"><p className="text-xs text-danger-600 whitespace-pre-line">{error}</p></div>}
+      {successMsg && <div className="px-6 py-2 bg-success-50 border-b border-success-100"><p className="text-xs text-success-700">✓ {successMsg}</p></div>}
 
       {showBulk && (
-        <div className="px-6 py-4 border-b border-gray-100 bg-blue-50/40">
+        <div className="px-6 py-4 border-b border-gray-100 bg-primary-50/40">
           <form onSubmit={handleBulk} className="space-y-3">
             <p className="text-xs font-medium text-gray-700">Bulk Import</p>
             <p className="text-[11px] text-gray-500">One per line: <code className="bg-gray-100 px-1 rounded">PLCAddress,NodeName</code></p>
-            {bulkError && <p className="text-xs text-red-600">{bulkError}</p>}
-            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={4} placeholder={"DB1,REAL0,Temperature\nDB1,REAL4,Pressure"} className="w-full rounded border border-gray-300 px-2.5 py-1.5 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+            {bulkError && <p className="text-xs text-danger-600">{bulkError}</p>}
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={4} placeholder={"DB1,REAL0,Temperature\nDB1,REAL4,Pressure"} className="w-full rounded border border-gray-300 px-2.5 py-1.5 text-xs font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500" />
             <div className="flex gap-2">
               <Button size="sm" type="submit" loading={bulkMut.isPending}>Import All</Button>
               <Button variant="secondary" size="sm" type="button" onClick={() => { setShowBulk(false); setBulkError(''); }}>Cancel</Button>
@@ -250,7 +250,7 @@ function ConnectionMappings({ connection, mappings, allNodes, getNodePath, curre
                     ) : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-2 pr-6 py-1 text-center">
-                    <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600 text-sm" title="Remove row">×</button>
+                    <button onClick={() => removeRow(idx)} className="text-danger-400 hover:text-danger-600 text-sm" title="Remove row">×</button>
                   </td>
                 </tr>
               );
@@ -449,12 +449,12 @@ export function S7ConnectionManager() {
                   <Badge variant={status?.state === 'connected' ? 'green' : status?.state === 'error' ? 'red' : 'gray'} dot>
                     {status?.state ?? 'disconnected'}
                   </Badge>
-                  {status?.errorMessage && <span className="text-xs text-red-600">{status.errorMessage}</span>}
+                  {status?.errorMessage && <span className="text-xs text-danger-600">{status.errorMessage}</span>}
                 </div>
                 <div className="flex items-center gap-3">
                   <Button variant="ghost" size="sm" onClick={() => startEditConn(conn)}>Edit</Button>
                   <Button variant="ghost" size="sm" onClick={() => setDeleteConnId(conn.id)}>
-                    <span className="text-red-600">Delete</span>
+                    <span className="text-danger-600">Delete</span>
                   </Button>
                 </div>
               </div>

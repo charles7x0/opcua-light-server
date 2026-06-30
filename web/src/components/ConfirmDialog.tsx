@@ -1,4 +1,5 @@
 import { Button } from './Button';
+import { DIALOG_OVERLAY, DIALOG_PANEL, DIALOG_TITLE, DIALOG_MESSAGE } from './styles';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -12,10 +13,10 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-const VARIANT_MAP: Record<'danger' | 'warning', 'danger' | 'success'> = {
+const VARIANT_TO_BUTTON = {
   danger: 'danger',
   warning: 'success',
-};
+} as const;
 
 export function ConfirmDialog({
   open,
@@ -32,19 +33,15 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-desc">
-      <div className="fixed inset-0 bg-black/50" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h3 id="confirm-title" className="text-lg font-semibold text-gray-900">
-          {title}
-        </h3>
-        <p id="confirm-desc" className="mt-2 text-sm text-gray-600">
-          {message}
-        </p>
+      <div className={DIALOG_OVERLAY} onClick={onCancel} />
+      <div className={DIALOG_PANEL}>
+        <h3 id="confirm-title" className={DIALOG_TITLE}>{title}</h3>
+        <p id="confirm-desc" className={DIALOG_MESSAGE}>{message}</p>
         <div className="mt-4 flex justify-end gap-3">
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button variant={VARIANT_MAP[variant]} onClick={onConfirm} loading={loading}>
+          <Button variant={VARIANT_TO_BUTTON[variant]} onClick={onConfirm} loading={loading}>
             {confirmLabel}
           </Button>
         </div>

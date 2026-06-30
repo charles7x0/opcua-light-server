@@ -207,7 +207,7 @@ export function NamespaceManager() {
                   Edit
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(ns.id)}>
-                  <span className="text-red-600">Delete</span>
+                  <span className="text-danger-600">Delete</span>
                 </Button>
               </div>
             </div>

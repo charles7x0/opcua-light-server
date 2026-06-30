@@ -222,7 +222,7 @@ describe('SecuritySettings - Certificate Remaining Days Display', () => {
     await waitFor(() => {
       const daysElement = screen.getByText('365');
       expect(daysElement).toBeInTheDocument();
-      expect(daysElement).toHaveClass('text-green-600');
+      expect(daysElement).toHaveClass('text-success-600');
     });
   });
 
@@ -240,7 +240,7 @@ describe('SecuritySettings - Certificate Remaining Days Display', () => {
     await waitFor(() => {
       const daysElement = screen.getByText('60');
       expect(daysElement).toBeInTheDocument();
-      expect(daysElement).toHaveClass('text-yellow-600');
+      expect(daysElement).toHaveClass('text-warning-600');
     });
   });
 
@@ -258,7 +258,7 @@ describe('SecuritySettings - Certificate Remaining Days Display', () => {
     await waitFor(() => {
       const daysElement = screen.getByText('15');
       expect(daysElement).toBeInTheDocument();
-      expect(daysElement).toHaveClass('text-red-600');
+      expect(daysElement).toHaveClass('text-danger-600');
     });
   });
 
@@ -276,7 +276,7 @@ describe('SecuritySettings - Certificate Remaining Days Display', () => {
     await waitFor(() => {
       const expiredElement = screen.getByText('Expired');
       expect(expiredElement).toBeInTheDocument();
-      expect(expiredElement).toHaveClass('text-red-600');
+      expect(expiredElement).toHaveClass('text-danger-600');
     });
   });
 

@@ -25,7 +25,7 @@ function CreateNodeSplitButton({
         </Button>
         <button
           onClick={() => setOpen(!open)}
-          className="rounded-r-md rounded-l-none bg-green-700 px-2 py-2 text-sm font-medium text-white hover:bg-green-800 border-l border-green-500"
+          className="rounded-r-md rounded-l-none bg-success-700 px-2 py-2 text-sm font-medium text-white hover:bg-success-800 border-l border-success-500"
           aria-label="More create options"
         >
           ▾

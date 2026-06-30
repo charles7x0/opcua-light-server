@@ -7,16 +7,14 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ error, textareaSize = 'md', className = '', ...props }, ref) => {
-    return (
-      <textarea
-        ref={ref}
-        aria-invalid={error || undefined}
-        className={`mt-1 ${getFieldClasses(textareaSize, error)} ${className}`}
-        {...props}
-      />
-    );
-  }
+  ({ error, textareaSize = 'md', className = '', ...props }, ref) => (
+    <textarea
+      ref={ref}
+      aria-invalid={error || undefined}
+      className={`mt-1 ${getFieldClasses(textareaSize, error)} ${className}`}
+      {...props}
+    />
+  )
 );
 
 Textarea.displayName = 'Textarea';

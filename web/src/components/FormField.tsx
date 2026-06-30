@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
+import { FORM_LABEL, FORM_REQUIRED, FORM_DESCRIPTION, FORM_ERROR } from './styles';
 
 interface FormFieldProps {
-  /** The input element's id — used for label htmlFor binding */
   id: string;
   label: string;
   required?: boolean;
@@ -16,23 +16,13 @@ export function FormField({ id, label, required, error, description, children }:
 
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+      <label htmlFor={id} className={FORM_LABEL}>
         {label}
-        {required && (
-          <span aria-hidden="true" className="text-red-500 ml-0.5">*</span>
-        )}
+        {required && <span aria-hidden="true" className={FORM_REQUIRED}>*</span>}
       </label>
-      {description && (
-        <p id={descId} className="mt-0.5 text-xs text-gray-500">
-          {description}
-        </p>
-      )}
+      {description && <p id={descId} className={FORM_DESCRIPTION}>{description}</p>}
       {children}
-      {error && (
-        <p id={errorId} role="alert" className="mt-1 text-sm text-red-600">
-          {error}
-        </p>
-      )}
+      {error && <p id={errorId} role="alert" className={FORM_ERROR}>{error}</p>}
     </div>
   );
 }

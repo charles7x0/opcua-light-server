@@ -4,13 +4,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StatusBar } from '../../web/src/layout/StatusBar';
 
 // Mock the API module
-vi.mock('../../web/src/api', () => ({
+vi.mock('../../web/src/api/server', () => ({
   getServerStatus: vi.fn(),
+  getConnectedClients: vi.fn(),
+}));
+
+vi.mock('../../web/src/api/security', () => ({
   getSecurityConfig: vi.fn(),
+}));
+
+vi.mock('../../web/src/api/logs', () => ({
   getSystemLogs: vi.fn(),
 }));
 
-import { getServerStatus, getSecurityConfig, getSystemLogs } from '../../web/src/api';
+import { getServerStatus } from '../../web/src/api/server';
+import { getSecurityConfig } from '../../web/src/api/security';
+import { getSystemLogs } from '../../web/src/api/logs';
 
 const mockedGetServerStatus = vi.mocked(getServerStatus);
 const mockedGetSecurityConfig = vi.mocked(getSecurityConfig);
@@ -46,10 +55,10 @@ describe('StatusBar - Certificate Indicator', () => {
     render(<StatusBar />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('🔒 365d')).toBeInTheDocument();
+      expect(screen.getByLabelText('Certificate expires in 365 days')).toBeInTheDocument();
     });
 
-    const indicator = screen.getByText('🔒 365d');
+    const indicator = screen.getByLabelText('Certificate expires in 365 days');
     expect(indicator).toHaveClass('text-green-500');
   });
 
@@ -63,10 +72,10 @@ describe('StatusBar - Certificate Indicator', () => {
     render(<StatusBar />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('🔒 60d')).toBeInTheDocument();
+      expect(screen.getByLabelText('Certificate expires in 60 days')).toBeInTheDocument();
     });
 
-    const indicator = screen.getByText('🔒 60d');
+    const indicator = screen.getByLabelText('Certificate expires in 60 days');
     expect(indicator).toHaveClass('text-yellow-500');
   });
 
@@ -80,10 +89,10 @@ describe('StatusBar - Certificate Indicator', () => {
     render(<StatusBar />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('🔒 15d')).toBeInTheDocument();
+      expect(screen.getByLabelText('Certificate expires in 15 days')).toBeInTheDocument();
     });
 
-    const indicator = screen.getByText('🔒 15d');
+    const indicator = screen.getByLabelText('Certificate expires in 15 days');
     expect(indicator).toHaveClass('text-red-500');
   });
 
@@ -97,10 +106,10 @@ describe('StatusBar - Certificate Indicator', () => {
     render(<StatusBar />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText('🔒 Expired')).toBeInTheDocument();
+      expect(screen.getByLabelText('Certificate expired')).toBeInTheDocument();
     });
 
-    const indicator = screen.getByText('🔒 Expired');
+    const indicator = screen.getByLabelText('Certificate expired');
     expect(indicator).toHaveClass('text-red-500');
   });
 

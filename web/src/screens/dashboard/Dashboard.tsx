@@ -2,20 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients, ServerStatus } from '../../api';
 import { ConnectedClientsTable } from './ConnectedClientsTable';
 import { Button, Alert, Card } from '../../components';
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  parts.push(`${secs}s`);
-  return parts.join(' ');
-}
+import { formatUptime } from '../../utils/formatUptime';
 
 const STATUS_CONFIG: Record<ServerStatus['state'], { label: string; color: string; bgColor: string; dotColor: string }> = {
   running: {
@@ -134,7 +121,7 @@ export function Dashboard() {
 
         {/* Error message */}
         {status.state === 'error' && status.lastError && (
-          <p className="mt-3 text-sm text-red-600" role="alert">{status.lastError}</p>
+          <p className="mt-3 text-sm text-danger-600" role="alert">{status.lastError}</p>
         )}
       </div>
 

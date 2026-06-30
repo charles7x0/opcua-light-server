@@ -7,16 +7,14 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ error, inputSize = 'md', className = '', ...props }, ref) => {
-    return (
-      <input
-        ref={ref}
-        aria-invalid={error || undefined}
-        className={`mt-1 ${getFieldClasses(inputSize, error)} ${className}`}
-        {...props}
-      />
-    );
-  }
+  ({ error, inputSize = 'md', className = '', ...props }, ref) => (
+    <input
+      ref={ref}
+      aria-invalid={error || undefined}
+      className={`mt-1 ${getFieldClasses(inputSize, error)} ${className}`}
+      {...props}
+    />
+  )
 );
 
 Input.displayName = 'Input';

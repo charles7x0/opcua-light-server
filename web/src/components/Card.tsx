@@ -1,4 +1,5 @@
 import { HTMLAttributes, ReactNode } from 'react';
+import { CARD_BASE, CARD_HEADER } from './styles';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -7,10 +8,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 export function Card({ children, padding = true, className = '', ...props }: CardProps) {
   return (
-    <div
-      className={`bg-white rounded-lg border border-gray-200 ${padding ? 'p-6' : ''} ${className}`}
-      {...props}
-    >
+    <div className={`${CARD_BASE} ${padding ? 'p-6' : ''} ${className}`} {...props}>
       {children}
     </div>
   );
@@ -18,8 +16,6 @@ export function Card({ children, padding = true, className = '', ...props }: Car
 
 export function CardHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <h3 className={`text-sm font-medium text-gray-900 mb-4 ${className}`}>
-      {children}
-    </h3>
+    <h3 className={`${CARD_HEADER} ${className}`}>{children}</h3>
   );
 }

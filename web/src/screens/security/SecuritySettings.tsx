@@ -277,7 +277,7 @@ export function SecuritySettings() {
                   checked={config?.mode === mode}
                   onChange={() => policyMutation.mutate(mode)}
                   disabled={policyMutation.isPending}
-                  className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                 />
                 <span className="text-sm text-gray-700">{mode}</span>
               </label>
@@ -298,13 +298,13 @@ export function SecuritySettings() {
               <dt className="text-sm text-gray-500">Remaining Days:</dt>
               <dd>
                 {config.certificateRemainingDays === 0 ? (
-                  <span className="text-sm font-semibold text-red-600">Expired</span>
+                  <span className="text-sm font-semibold text-danger-600">Expired</span>
                 ) : config.certificateRemainingDays < 30 ? (
-                  <span className="text-sm font-semibold text-red-600">{config.certificateRemainingDays}</span>
+                  <span className="text-sm font-semibold text-danger-600">{config.certificateRemainingDays}</span>
                 ) : config.certificateRemainingDays <= 90 ? (
-                  <span className="text-sm font-semibold text-yellow-600">{config.certificateRemainingDays}</span>
+                  <span className="text-sm font-semibold text-warning-600">{config.certificateRemainingDays}</span>
                 ) : (
-                  <span className="text-sm font-semibold text-green-600">{config.certificateRemainingDays}</span>
+                  <span className="text-sm font-semibold text-success-600">{config.certificateRemainingDays}</span>
                 )}
               </dd>
             </div>

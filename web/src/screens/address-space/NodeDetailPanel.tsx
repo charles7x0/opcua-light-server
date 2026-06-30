@@ -45,7 +45,7 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
 
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <DetailRow label="Data Type" value={
-          <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+          <span className="inline-flex items-center rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
             {node.dataType}
           </span>
         } />

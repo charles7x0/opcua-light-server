@@ -34,7 +34,7 @@ function TreeItem({ label, icon, level, expanded, selected, onToggle, onClick, a
     <div>
       <div
         className={`group flex items-center gap-1.5 px-2 py-1 cursor-pointer rounded text-sm hover:bg-gray-100 ${
-          selected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+          selected ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700'
         }`}
         style={{ paddingLeft }}
         onClick={() => {
@@ -101,7 +101,7 @@ function InlineCreateForm({
         placeholder="Object name..."
         autoFocus
         disabled={isSubmitting}
-        className="flex-1 text-sm border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0"
+        className="flex-1 text-sm border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 min-w-0"
         onKeyDown={(e) => {
           if (e.key === 'Escape') onCancel();
         }}
@@ -190,7 +190,7 @@ function ObjectNodeTreeItem({
           {canAddChild && (
             <button
               onClick={() => { setCreating(true); setExpanded(true); }}
-              className="text-xs text-blue-500 hover:text-blue-700 px-0.5"
+              className="text-xs text-primary-500 hover:text-primary-700 px-0.5"
               title="Add child object node"
             >
               +
@@ -198,7 +198,7 @@ function ObjectNodeTreeItem({
           )}
           <button
             onClick={() => { if (confirm(`Delete "${objectNode.name}"?`)) deleteMutation.mutate(); }}
-            className="text-xs text-red-400 hover:text-red-600 px-0.5"
+            className="text-xs text-danger-400 hover:text-danger-600 px-0.5"
             title="Delete object node"
           >
             ×
@@ -296,7 +296,7 @@ function NamespaceTreeNode({
       actions={
         <button
           onClick={() => { setCreating(true); setExpanded(true); }}
-          className="text-xs text-blue-500 hover:text-blue-700 px-0.5"
+          className="text-xs text-primary-500 hover:text-primary-700 px-0.5"
           title="Add object node"
         >
           +
@@ -356,7 +356,7 @@ export default function AddressSpaceTree({ onNodeSelect, selectedNodeId }: Addre
 
   if (error) {
     return (
-      <div className="p-4 text-sm text-red-600">
+      <div className="p-4 text-sm text-danger-600">
         Failed to load address space: {(error as Error).message}
       </div>
     );
