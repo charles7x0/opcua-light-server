@@ -245,9 +245,12 @@ opcua-light-server/
 │   └── shared/           # Shared utilities
 ├── web/                  # React web UI (Vite + Tailwind CSS)
 │   └── src/
-│       ├── components/   # Dashboard, AddressSpaceTree, NodeForm, etc.
-│       ├── api.ts        # API client
-│       └── App.tsx       # App layout and routing
+│       ├── components/   # Shared UI primitives (actions/, feedback/, inputs/, layout/)
+│       ├── hooks/        # Custom React hooks (useNodePaths, etc.)
+│       ├── layout/       # App shell, NavBar, StatusBar, LogPanel
+│       ├── screens/      # Feature screens (address-space/, dashboard/, s7/, security/)
+│       ├── api.ts        # Typed API client
+│       └── main.tsx      # Entry point
 ├── runtime/              # open62541 C runtime
 │   ├── src/main.c        # Runtime entry point
 │   └── CMakeLists.txt    # CMake build config
@@ -281,6 +284,57 @@ npm run test:integration  # Integration only
 ## Supported OPC UA Data Types
 
 Boolean, Int16, Int32, Int64, UInt16, UInt32, UInt64, Float, Double, String, DateTime, ByteString
+
+## Commit Convention
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+type(scope): short imperative description
+```
+
+**Rules:**
+- Subject line under 50 characters
+- Use imperative mood ("add feature" not "added feature")
+- No period at the end
+
+**Types:**
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature or user-facing change |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring without behavior change |
+| `test` | Adding or updating tests |
+| `docs` | Documentation only |
+| `chore` | Build, tooling, config, dependency updates |
+| `style` | Formatting, whitespace (no logic change) |
+| `perf` | Performance improvement |
+
+**Scopes:**
+
+| Scope | Area |
+|-------|------|
+| `web` | React web UI |
+| `api` | Control API (Express routes, middleware) |
+| `s7` | S7 PLC connector |
+| `security` | Certificate/auth features |
+| `dashboard` | Dashboard screen |
+| `runtime` | C open62541 runtime |
+| `db` | Database/repositories |
+| `nodes` | Node/namespace management |
+
+Omit scope for cross-cutting changes (e.g., `test: add stress test suite`).
+
+**Examples:**
+
+```
+feat(s7): show live PLC values in mappings UI
+fix(security): handle expired certificate gracefully
+refactor(web): split S7 screen into focused components
+test: add benchmark wrapper for CPU/memory profiling
+chore: initial project setup
+```
 
 ## License
 
