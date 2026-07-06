@@ -21,10 +21,22 @@ opcua-light-server/
 │   └── types/                    # Domain types, DTOs, and declaration files
 ├── web/                          # React web UI (separate npm package)
 │   └── src/
-│       ├── components/           # React components (Dashboard, SecuritySettings, StatusBar, etc.)
-│       ├── hooks/                # Custom React hooks
-│       ├── api.ts                # API client (typed fetch wrapper)
-│       └── App.tsx               # Root component
+│       ├── components/           # Shared UI primitives
+│       │   ├── actions/          # Button, FileButton
+│       │   ├── feedback/         # Alert, ConfirmDialog
+│       │   ├── inputs/           # Input, Select, Textarea, FormField
+│       │   ├── layout/           # Card, CardHeader, Badge
+│       │   ├── index.ts          # Barrel export
+│       │   └── styles.ts         # Centralized Tailwind class maps
+│       ├── hooks/                # Custom React hooks (useNodePaths, etc.)
+│       ├── layout/               # App shell, NavBar, StatusBar, LogPanel
+│       ├── screens/              # Feature screens
+│       │   ├── address-space/    # AddressSpaceSection, Tree, NodeForm, NodeDetailPanel, NamespaceManager
+│       │   ├── dashboard/        # Dashboard, ConnectedClientsTable
+│       │   ├── s7/               # S7ConnectionManager, ConnectionCard, ConnectionForm, MappingTable, BulkImport
+│       │   └── security/         # SecuritySettings, SecurityModeCard, CertificateStatusCard, GenerateCertificateCard, UploadCertificateCard, CertificatePanel, utils/
+│       ├── api.ts                # Typed API client (fetch wrapper)
+│       └── main.tsx              # Entry point
 ├── runtime/                      # open62541 C runtime
 │   ├── src/main.c                # Runtime entry point
 │   ├── CMakeLists.txt            # CMake build config
@@ -47,6 +59,10 @@ opcua-light-server/
 
 - **Tests live in `tests/`**, not alongside source files. Organized by test type.
 - **Web UI is a separate package** in `web/` with its own dependencies and build.
+- **Web screens** are split into focused single-responsibility components (one concern per file).
+- **Shared UI primitives** live in `web/src/components/` organized by category (actions, feedback, inputs, layout).
+- **Screen-specific components** live in their screen folder (e.g., `web/src/screens/s7/S7MappingTable.tsx`).
+- **Custom hooks** live in `web/src/hooks/` and are reusable across screens.
 - **Runtime is a separate C project** in `runtime/` built with CMake.
 - **Repositories** follow a one-per-entity pattern in `src/db/repositories/`.
 - **Routes** are modular, one file per resource in `src/api/routes/`.

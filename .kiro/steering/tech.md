@@ -15,8 +15,9 @@
 ## Frontend (Web UI)
 
 - **Framework**: React 18 with TanStack React Query
-- **Styling**: Tailwind CSS + PostCSS
+- **Styling**: Tailwind CSS + PostCSS (centralized style maps in `components/styles.ts`)
 - **Build**: Vite
+- **Component architecture**: Shared UI primitives (actions/, feedback/, inputs/, layout/) + screen-specific components
 - **Separate package** in `web/` with its own `node_modules`
 
 ## OPC UA Runtime
