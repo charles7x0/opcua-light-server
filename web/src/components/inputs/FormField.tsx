@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { FORM_LABEL, FORM_REQUIRED, FORM_DESCRIPTION, FORM_ERROR } from './styles';
+import { FORM_LABEL, FORM_REQUIRED, FORM_DESCRIPTION, FORM_ERROR } from '../styles';
 
 interface FormFieldProps {
   id: string;

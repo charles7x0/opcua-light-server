@@ -1,4 +1,5 @@
 import { SelectedNode } from './AddressSpaceTree';
+import { Card, Badge } from '../../components';
 
 interface NodeDetailPanelProps {
   selection: SelectedNode | null;
@@ -45,9 +46,7 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
 
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <DetailRow label="Data Type" value={
-          <span className="inline-flex items-center rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
-            {node.dataType}
-          </span>
+          <Badge variant="blue">{node.dataType}</Badge>
         } />
         <DetailRow label="Current Value" value={
           <code className="text-sm font-mono bg-gray-50 px-1.5 py-0.5 rounded">
@@ -62,35 +61,37 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
         } />
       </dl>
 
-      <div className="border-t border-gray-200 pt-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-          Metadata
-        </h3>
-        <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
-          <div>
-            <dt className="text-gray-500">Created</dt>
-            <dd className="text-gray-700">
-              {new Date(node.createdAt).toLocaleString()}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-gray-500">Updated</dt>
-            <dd className="text-gray-700">
-              {new Date(node.updatedAt).toLocaleString()}
-            </dd>
-          </div>
-          {node.objectNodeId && (
+      <Card className="!border-t !border-x-0 !border-b-0 !rounded-none" padding={false}>
+        <div className="pt-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+            Metadata
+          </h3>
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
             <div>
-              <dt className="text-gray-500">Object Node ID</dt>
-              <dd className="text-gray-700 font-mono">{node.objectNodeId}</dd>
+              <dt className="text-gray-500">Created</dt>
+              <dd className="text-gray-700">
+                {new Date(node.createdAt).toLocaleString()}
+              </dd>
             </div>
-          )}
-          <div>
-            <dt className="text-gray-500">Namespace ID</dt>
-            <dd className="text-gray-700 font-mono">{node.namespaceId}</dd>
-          </div>
-        </dl>
-      </div>
+            <div>
+              <dt className="text-gray-500">Updated</dt>
+              <dd className="text-gray-700">
+                {new Date(node.updatedAt).toLocaleString()}
+              </dd>
+            </div>
+            {node.objectNodeId && (
+              <div>
+                <dt className="text-gray-500">Object Node ID</dt>
+                <dd className="text-gray-700 font-mono">{node.objectNodeId}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-gray-500">Namespace ID</dt>
+              <dd className="text-gray-700 font-mono">{node.namespaceId}</dd>
+            </div>
+          </dl>
+        </div>
+      </Card>
     </div>
   );
 }

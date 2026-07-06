@@ -1,5 +1,5 @@
 import { HTMLAttributes, ReactNode } from 'react';
-import { CARD_BASE, CARD_HEADER } from './styles';
+import { CARD_BASE, CARD_HEADER } from '../styles';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;

@@ -1,5 +1,5 @@
 import { InputHTMLAttributes, forwardRef } from 'react';
-import { type InputSize, getFieldClasses } from './styles';
+import { type InputSize, getFieldClasses } from '../styles';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;

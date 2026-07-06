@@ -1,5 +1,5 @@
 import { SelectHTMLAttributes, forwardRef } from 'react';
-import { type InputSize, getFieldClasses, DISABLED_INPUT } from './styles';
+import { type InputSize, getFieldClasses, DISABLED_INPUT } from '../styles';
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean;

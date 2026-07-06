@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNamespaces, getObjectNodeTree, getNodes, createObjectNode, deleteObjectNode, Namespace, ObjectNode, OpcUaNode, ApiError } from '../../api';
+import { Button, Input, Alert } from '../../components';
 
 export interface SelectedNode {
   node: OpcUaNode;
@@ -94,34 +95,38 @@ function InlineCreateForm({
     <form onSubmit={handleSubmit} className="flex items-center gap-1 px-2 py-1" style={{ paddingLeft }}>
       <span className="w-4" />
       <span>📦</span>
-      <input
+      <Input
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Object name..."
         autoFocus
         disabled={isSubmitting}
-        className="flex-1 text-sm border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 min-w-0"
+        inputSize="xs"
+        className="!mt-0 flex-1 min-w-0"
         onKeyDown={(e) => {
           if (e.key === 'Escape') onCancel();
         }}
       />
-      <button
+      <Button
         type="submit"
+        variant="ghost"
+        size="xs"
         disabled={isSubmitting || !name.trim()}
-        className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+        className="text-success-600 hover:text-success-800"
       >
         ✓
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         onClick={onCancel}
         disabled={isSubmitting}
-        className="text-xs text-gray-400 hover:text-gray-600"
       >
         ✕
-      </button>
-      {error && <span className="text-xs text-red-500 ml-1">{error}</span>}
+      </Button>
+      {error && <span className="text-xs text-danger-500 ml-1">{error}</span>}
     </form>
   );
 }
@@ -188,21 +193,25 @@ function ObjectNodeTreeItem({
       actions={
         <>
           {canAddChild && (
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => { setCreating(true); setExpanded(true); }}
-              className="text-xs text-primary-500 hover:text-primary-700 px-0.5"
               title="Add child object node"
+              className="text-primary-500 hover:text-primary-700 !px-0.5 !py-0"
             >
               +
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => { if (confirm(`Delete "${objectNode.name}"?`)) deleteMutation.mutate(); }}
-            className="text-xs text-danger-400 hover:text-danger-600 px-0.5"
             title="Delete object node"
+            className="text-danger-400 hover:text-danger-600 !px-0.5 !py-0"
           >
             ×
-          </button>
+          </Button>
         </>
       }
     >
@@ -294,13 +303,15 @@ function NamespaceTreeNode({
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       actions={
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => { setCreating(true); setExpanded(true); }}
-          className="text-xs text-primary-500 hover:text-primary-700 px-0.5"
           title="Add object node"
+          className="text-primary-500 hover:text-primary-700 !px-0.5 !py-0"
         >
           +
-        </button>
+        </Button>
       }
     >
       {objectNodes.map((objNode) => (
@@ -356,8 +367,10 @@ export default function AddressSpaceTree({ onNodeSelect, selectedNodeId }: Addre
 
   if (error) {
     return (
-      <div className="p-4 text-sm text-danger-600">
-        Failed to load address space: {(error as Error).message}
+      <div className="p-4">
+        <Alert variant="error">
+          Failed to load address space: {(error as Error).message}
+        </Alert>
       </div>
     );
   }

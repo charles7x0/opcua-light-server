@@ -5,7 +5,7 @@ import NodeDetailPanel from './NodeDetailPanel';
 import { NodeForm } from './NodeForm';
 import { NamespaceManager } from './NamespaceManager';
 import { deleteNode, exportNodesCsv, importNodesCsv, CsvImportResult } from '../../api';
-import { Button, Alert, ConfirmDialog, FileButton } from '../../components';
+import { Button, Alert, Card, ConfirmDialog, FileButton } from '../../components';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 
 function CreateNodeSplitButton({
@@ -23,28 +23,33 @@ function CreateNodeSplitButton({
         <Button variant="success" onClick={onCreateVariable} className="rounded-r-none">
           Create Variable Node
         </Button>
-        <button
+        <Button
+          variant="success"
           onClick={() => setOpen(!open)}
-          className="rounded-r-md rounded-l-none bg-success-700 px-2 py-2 text-sm font-medium text-white hover:bg-success-800 border-l border-success-500"
+          className="rounded-l-none !bg-success-700 hover:!bg-success-800 border-l border-success-500 !px-2"
           aria-label="More create options"
         >
           ▾
-        </button>
+        </Button>
       </div>
       {open && (
         <div className="absolute left-0 mt-1 w-56 rounded-md bg-white shadow-lg border border-gray-200 z-10">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => { onCreateVariable(); setOpen(false); }}
-            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="!justify-start w-full rounded-none px-4 py-2"
           >
             🔹 Create Variable Node
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => { onCreateObjectNode(); setOpen(false); }}
-            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="!justify-start w-full rounded-none px-4 py-2"
           >
             📦 Create Object Node (subfolder)
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -112,7 +117,7 @@ export function AddressSpaceSection() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tree panel */}
-        <div className="lg:col-span-1 bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <Card padding={false} className="lg:col-span-1 overflow-hidden">
           <AddressSpaceTree
             onNodeSelect={(selection) => {
               setSelectedNode(selection);
@@ -121,10 +126,10 @@ export function AddressSpaceSection() {
             }}
             selectedNodeId={selectedNode?.node.id}
           />
-        </div>
+        </Card>
 
         {/* Detail / Form panel */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <Card padding={false} className="lg:col-span-2 overflow-hidden">
           {showNodeForm || editingNode ? (
             <div className="p-4">
               <NodeForm
@@ -160,7 +165,7 @@ export function AddressSpaceSection() {
               )}
             </>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Create node split button */}

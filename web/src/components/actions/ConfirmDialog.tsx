@@ -1,5 +1,5 @@
 import { Button } from './Button';
-import { DIALOG_OVERLAY, DIALOG_PANEL, DIALOG_TITLE, DIALOG_MESSAGE } from './styles';
+import { DIALOG_OVERLAY, DIALOG_PANEL, DIALOG_TITLE, DIALOG_MESSAGE } from '../styles';
 
 interface ConfirmDialogProps {
   open: boolean;

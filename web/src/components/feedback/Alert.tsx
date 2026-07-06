@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { type AlertVariant, ALERT_BASE, ALERT_VARIANTS } from './styles';
+import { type AlertVariant, ALERT_BASE, ALERT_VARIANTS } from '../styles';
+import { Button } from '../actions/Button';
 
 interface AlertProps {
   variant: AlertVariant;
@@ -14,14 +15,15 @@ export function Alert({ variant, children, onDismiss, className = '' }: AlertPro
       <div className="flex items-center justify-between">
         <div>{children}</div>
         {onDismiss && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={onDismiss}
-            className="ml-3 text-current opacity-50 hover:opacity-80"
             aria-label="Dismiss"
+            className="ml-3 text-current opacity-50 hover:opacity-80"
           >
             ✕
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -285,13 +285,15 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
       {!isEdit && (
         <p className="text-xs text-gray-500">
           <span aria-hidden="true">💡</span> Want to map this variable to a PLC address?{' '}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 's7' }))}
-            className="text-primary-600 hover:text-primary-800 underline text-xs bg-transparent border-none cursor-pointer p-0"
+            className="!inline !p-0 text-primary-600 hover:text-primary-800 underline"
           >
             Connect to S7 PLC variable
-          </button>
+          </Button>
           {' '}after creating the node.
         </p>
       )}

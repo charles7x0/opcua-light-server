@@ -1,10 +1,11 @@
-export { Button } from './Button';
-export { Input } from './Input';
-export { Textarea } from './Textarea';
-export { Select } from './Select';
-export { FormField } from './FormField';
-export { FileButton } from './FileButton';
-export { Card, CardHeader } from './Card';
-export { Alert } from './Alert';
-export { ConfirmDialog } from './ConfirmDialog';
-export { Badge } from './Badge';
+// Actions
+export { Button, FileButton, ConfirmDialog } from './actions';
+
+// Inputs
+export { Input, Textarea, Select, FormField } from './inputs';
+
+// Layout
+export { Card, CardHeader, Badge, StatusDot, StatusBarItem, StatusBarAlert } from './layout';
+
+// Feedback
+export { Alert } from './feedback';

@@ -111,6 +111,23 @@ export const DIALOG_PANEL = 'relative z-10 w-full max-w-md rounded-lg bg-white p
 export const DIALOG_TITLE = 'text-lg font-semibold text-gray-900';
 export const DIALOG_MESSAGE = 'mt-2 text-sm text-gray-600';
 
+// ─── StatusDot ─────────────────────────────────────────────────────────────────
+
+export type StatusDotColor = 'green' | 'red' | 'yellow' | 'gray';
+
+export const STATUS_DOT_COLORS: Record<StatusDotColor, string> = {
+  green: 'bg-green-400',
+  red: 'bg-red-500',
+  yellow: 'bg-yellow-400',
+  gray: 'bg-gray-400',
+};
+
+export const STATUS_DOT_BASE = 'inline-block w-2 h-2 rounded-full';
+
+// ─── StatusBarItem ────────────────────────────────────────────────────────────
+
+export const STATUS_BAR_ITEM_BASE = 'flex items-center gap-1.5';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Compose input/select/textarea class string from size + error state. */

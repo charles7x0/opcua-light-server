@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { type ButtonSize, BUTTON_SIZES, FILE_BUTTON_BASE, DISABLED_STYLES } from './styles';
+import { type ButtonSize, BUTTON_SIZES, FILE_BUTTON_BASE, DISABLED_STYLES } from '../styles';
 
 interface FileButtonProps {
   children: React.ReactNode;

@@ -1,5 +1,5 @@
 import { ButtonHTMLAttributes } from 'react';
-import { type ButtonSize, type ButtonVariant, BUTTON_BASE, BUTTON_VARIANTS, BUTTON_SIZES } from './styles';
+import { type ButtonSize, type ButtonVariant, BUTTON_BASE, BUTTON_VARIANTS, BUTTON_SIZES } from '../styles';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
