@@ -5,7 +5,6 @@ import {
   rejectPkiCertificate,
   trustPkiCertificate,
   deletePkiCertificate,
-  PkiCertificate,
   ApiError,
 } from '../../api';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, Alert } from '../../components';
