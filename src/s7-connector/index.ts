@@ -6,6 +6,9 @@ import type {
 } from '../types/index.js';
 import { logService } from '../log/index.js';
 
+/** Type alias for a nodes7 client instance. */
+type NodeS7Instance = InstanceType<typeof NodeS7>;
+
 /**
  * Value update emitted when a PLC variable is read successfully.
  */
@@ -39,7 +42,7 @@ const MAX_LOG_ENTRIES = 1000;
  */
 interface ManagedConnection {
   config: S7ConnectionConfig;
-  client: any; // nodes7 instance
+  client: NodeS7Instance | null;
   state: S7ConnectionStatus['state'];
   lastPollAt?: Date;
   errorMessage?: string;
@@ -275,9 +278,9 @@ export class S7Connector {
     if (managed.connecting) return;
     managed.connecting = true;
 
-    // Dynamically import nodes7 (CommonJS module)
-    const NodeS7 = this.createNodeS7Instance();
-    managed.client = NodeS7;
+    // Create a new nodes7 instance
+    const client = this.createNodeS7Instance();
+    managed.client = client;
 
     const connectionParams = {
       host: managed.config.host,
@@ -287,7 +290,7 @@ export class S7Connector {
       timeout: 5000,
     };
 
-    managed.client.initiateConnection(connectionParams, (err: any) => {
+    client.initiateConnection(connectionParams, (err: any) => {
       managed.connecting = false;
 
       if (err) {
@@ -521,7 +524,7 @@ export class S7Connector {
    * Create a new nodes7 instance.
    * Separated into its own method to allow mocking in tests.
    */
-  protected createNodeS7Instance(): any {
+  protected createNodeS7Instance(): NodeS7Instance {
     return new NodeS7({ silent: true });
   }
 }

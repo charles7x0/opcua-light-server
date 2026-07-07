@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database.js';
 import type { OpcUaNode, OpcUaDataType } from '../../types/index.js';
 import type { CreateNodeRequest, UpdateNodeRequest } from '../../types/api.js';
+import type { Result, DomainError } from '../../types/result.js';
 
 /** Supported OPC UA data types for validation. */
 const SUPPORTED_DATA_TYPES: OpcUaDataType[] = [
@@ -51,36 +52,41 @@ export class NodeRepository {
 
   /**
    * Create a new node after validating the request.
-   * Throws if validation fails or a uniqueness constraint is violated.
+   * Returns a Result with the created node or a domain error.
    */
-  create(request: CreateNodeRequest): OpcUaNode {
+  create(request: CreateNodeRequest): Result<OpcUaNode> {
     const validation = this.validateCreate(request);
     if (!validation.valid) {
-      const error = new Error(
-        `Validation failed: ${validation.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`
-      );
-      (error as any).validationErrors = validation.errors;
-      throw error;
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `Validation failed: ${validation.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`,
+          details: validation.errors,
+        },
+      };
     }
 
     // Check name uniqueness within namespace
     const duplicate = this.findByNameInNamespace(request.name, request.namespaceId);
     if (duplicate) {
-      const error = new Error(
-        `Duplicate node name '${request.name}' within namespace '${request.namespaceId}'`
-      );
-      (error as any).validationErrors = [
-        { field: 'name', message: `Node name '${request.name}' already exists in this namespace` },
-      ];
-      (error as any).isDuplicate = true;
-      throw error;
+      return {
+        success: false,
+        error: {
+          code: 'DUPLICATE_ERROR',
+          message: `Duplicate node name '${request.name}' within namespace '${request.namespaceId}'`,
+          details: [
+            { field: 'name', message: `Node name '${request.name}' already exists in this namespace` },
+          ],
+        },
+      };
     }
 
     const id = uuidv4();
     const initialValue =
       request.initialValue !== undefined ? JSON.stringify(request.initialValue) : null;
 
-    return this.database.write((db) => {
+    const node = this.database.write((db) => {
       db.prepare(
         `INSERT INTO nodes (id, namespace_id, object_node_id, name, data_type, initial_value, description)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
@@ -98,6 +104,8 @@ export class NodeRepository {
         db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as NodeRow
       );
     });
+
+    return { success: true, data: node };
   }
 
   /**
@@ -134,41 +142,50 @@ export class NodeRepository {
 
   /**
    * Update an existing node. Only provided fields are updated.
-   * Throws if validation fails or the node is not found.
+   * Returns a Result with the updated node or a domain error.
    */
-  update(id: string, request: UpdateNodeRequest): OpcUaNode {
+  update(id: string, request: UpdateNodeRequest): Result<OpcUaNode> {
     const existing = this.findById(id);
     if (!existing) {
-      const error = new Error(`Node with id '${id}' not found`);
-      (error as any).isNotFound = true;
-      throw error;
+      return {
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Node with id '${id}' not found`,
+        },
+      };
     }
 
     const validation = this.validateUpdate(request, existing);
     if (!validation.valid) {
-      const error = new Error(
-        `Validation failed: ${validation.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`
-      );
-      (error as any).validationErrors = validation.errors;
-      throw error;
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `Validation failed: ${validation.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`,
+          details: validation.errors,
+        },
+      };
     }
 
     // Check name uniqueness if name is being changed
     if (request.name && request.name !== existing.name) {
       const duplicate = this.findByNameInNamespace(request.name, existing.namespaceId);
       if (duplicate) {
-        const error = new Error(
-          `Duplicate node name '${request.name}' within namespace '${existing.namespaceId}'`
-        );
-        (error as any).validationErrors = [
-          { field: 'name', message: `Node name '${request.name}' already exists in this namespace` },
-        ];
-        (error as any).isDuplicate = true;
-        throw error;
+        return {
+          success: false,
+          error: {
+            code: 'DUPLICATE_ERROR',
+            message: `Duplicate node name '${request.name}' within namespace '${existing.namespaceId}'`,
+            details: [
+              { field: 'name', message: `Node name '${request.name}' already exists in this namespace` },
+            ],
+          },
+        };
       }
     }
 
-    return this.database.write((db) => {
+    const node = this.database.write((db) => {
       const updates: string[] = [];
       const values: unknown[] = [];
 
@@ -206,15 +223,26 @@ export class NodeRepository {
         db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as NodeRow
       );
     });
+
+    return { success: true, data: node };
   }
 
   /**
-   * Delete a node by ID. Returns true if deleted, false if not found.
+   * Delete a node by ID. Returns a Result indicating success or not-found.
    */
-  delete(id: string): boolean {
+  delete(id: string): Result<void> {
     return this.database.write((db) => {
       const result = db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
-      return result.changes > 0;
+      if (result.changes > 0) {
+        return { success: true as const, data: undefined };
+      }
+      return {
+        success: false as const,
+        error: {
+          code: 'NOT_FOUND' as const,
+          message: `Node with id '${id}' not found`,
+        },
+      };
     });
   }
 

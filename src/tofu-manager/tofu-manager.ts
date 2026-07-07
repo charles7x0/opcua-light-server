@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import forge from 'node-forge';
 import type { ProcessManager } from '../process-manager/index.js';
 import type { CertificateInfo } from './index.js';
+import { logService } from '../log/index.js';
 
 /**
  * TOFU (Trust On First Use) client certificate manager.
@@ -33,7 +34,7 @@ export class TofuManager {
       mkdirSync(this.rejectedPath, { recursive: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[TofuManager] Failed to create PKI directories: ${message}`);
+      logService.error('TofuManager', `Failed to create PKI directories: ${message}`);
       throw err;
     }
   }
@@ -94,7 +95,7 @@ export class TofuManager {
     }
 
     unlinkSync(filePath);
-    console.log(`[TofuManager] Certificate deleted: ${thumbprint}`);
+    logService.info('TofuManager', `Certificate deleted: ${thumbprint}`);
     this.signalReload();
   }
 
@@ -113,7 +114,7 @@ export class TofuManager {
 
     const destPath = resolve(this.rejectedPath, `${thumbprint}.der`);
     renameSync(sourcePath, destPath);
-    console.log(`[TofuManager] Certificate rejected: ${thumbprint}`);
+    logService.info('TofuManager', `Certificate rejected: ${thumbprint}`);
     this.signalReload();
   }
 
@@ -165,7 +166,7 @@ export class TofuManager {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[TofuManager] Skipping malformed certificate file ${filename}: ${message}`);
+      logService.warn('TofuManager', `Skipping malformed certificate file ${filename}: ${message}`);
       return null;
     }
   }
@@ -193,7 +194,7 @@ export class TofuManager {
     }
 
     renameSync(rejectedFile, trustedFile);
-    console.log(`[TofuManager] Certificate re-trusted: ${thumbprint}`);
+    logService.info('TofuManager', `Certificate re-trusted: ${thumbprint}`);
     this.signalReload();
   }
 
@@ -215,14 +216,14 @@ export class TofuManager {
   signalReload(): void {
     const status = this.processManager.getStatus();
     if (status.state !== 'running') {
-      console.log('[TofuManager] Runtime not running, skipping reload signal');
+      logService.info('TofuManager', 'Runtime not running, skipping reload signal');
       return;
     }
     const ok = this.processManager.writeToStdin(
       JSON.stringify({ type: 'trust_store_reload' }) + '\n'
     );
     if (!ok) {
-      console.warn('[TofuManager] Failed to write reload signal to stdin');
+      logService.warn('TofuManager', 'Failed to write reload signal to stdin');
     }
   }
 }

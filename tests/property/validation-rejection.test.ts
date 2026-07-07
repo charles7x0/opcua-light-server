@@ -77,14 +77,14 @@ describe('Feature: opcua-light-server, Property 5: Validation Rejects Invalid In
             description: params.description,
           };
 
-          expect(() => nodeRepository.create(request)).toThrow();
+          const result = nodeRepository.create(request);
 
-          try {
-            nodeRepository.create(request);
-          } catch (error: any) {
-            expect(error.validationErrors).toBeDefined();
-            expect(Array.isArray(error.validationErrors)).toBe(true);
-            const fieldNames = error.validationErrors.map((e: any) => e.field);
+          expect(result.success).toBe(false);
+          if (!result.success) {
+            expect(result.error.code).toBe('VALIDATION_ERROR');
+            expect(result.error.details).toBeDefined();
+            expect(Array.isArray(result.error.details)).toBe(true);
+            const fieldNames = result.error.details!.map((e) => e.field);
             expect(fieldNames).toContain('name');
           }
         }
@@ -109,14 +109,14 @@ describe('Feature: opcua-light-server, Property 5: Validation Rejects Invalid In
             description: params.description,
           };
 
-          expect(() => nodeRepository.create(request)).toThrow();
+          const result = nodeRepository.create(request);
 
-          try {
-            nodeRepository.create(request);
-          } catch (error: any) {
-            expect(error.validationErrors).toBeDefined();
-            expect(Array.isArray(error.validationErrors)).toBe(true);
-            const fieldNames = error.validationErrors.map((e: any) => e.field);
+          expect(result.success).toBe(false);
+          if (!result.success) {
+            expect(result.error.code).toBe('VALIDATION_ERROR');
+            expect(result.error.details).toBeDefined();
+            expect(Array.isArray(result.error.details)).toBe(true);
+            const fieldNames = result.error.details!.map((e) => e.field);
             expect(fieldNames).toContain('namespaceId');
           }
         }
@@ -150,14 +150,14 @@ describe('Feature: opcua-light-server, Property 5: Validation Rejects Invalid In
             description: params.description,
           } as CreateNodeRequest;
 
-          expect(() => nodeRepository.create(request)).toThrow();
+          const result = nodeRepository.create(request);
 
-          try {
-            nodeRepository.create(request);
-          } catch (error: any) {
-            expect(error.validationErrors).toBeDefined();
-            expect(Array.isArray(error.validationErrors)).toBe(true);
-            const fieldNames = error.validationErrors.map((e: any) => e.field);
+          expect(result.success).toBe(false);
+          if (!result.success) {
+            expect(result.error.code).toBe('VALIDATION_ERROR');
+            expect(result.error.details).toBeDefined();
+            expect(Array.isArray(result.error.details)).toBe(true);
+            const fieldNames = result.error.details!.map((e) => e.field);
             expect(fieldNames).toContain('dataType');
           }
         }

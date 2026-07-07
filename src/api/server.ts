@@ -7,7 +7,10 @@ import { Database } from '../db/database.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { ConfigGenerator } from '../config-generator/index.js';
 import { S7Connector } from '../s7-connector/index.js';
+import { S7IpcBridge } from '../s7-connector/ipc-bridge.js';
 import { S7Repository } from '../db/repositories/s7-repository.js';
+import { NodeRepository } from '../db/repositories/node-repository.js';
+import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
 import { TofuManager } from '../tofu-manager/index.js';
 import { loadAuthConfig } from '../auth/config.js';
 import { createApp } from './app.js';
@@ -37,11 +40,14 @@ async function main(): Promise<void> {
 
   // ─── Initialize Database ────────────────────────────────────────────────────
   const database = new Database(dbPath);
+  logService.info('Server', `Database initialized at: ${dbPath}`);
   console.log(`Database initialized at: ${dbPath}`);
 
   // ─── Create Dependencies ────────────────────────────────────────────────────
   const processManager = new ProcessManager(runtimePath, configPath);
-  const configGenerator = new ConfigGenerator(database);
+  const nodeRepo = new NodeRepository(database);
+  const namespaceRepo = new NamespaceRepository(database);
+  const configGenerator = new ConfigGenerator(database, namespaceRepo, nodeRepo);
   const authConfig = loadAuthConfig();
 
   // ─── Initialize TOFU Manager ────────────────────────────────────────────────
@@ -63,86 +69,18 @@ async function main(): Promise<void> {
   }
 
   console.log(`S7 Connector initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
+  logService.info('Server', `S7 Connector initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
 
-  // Wire S7 value updates to the runtime process via stdin pipe IPC.
-  // When the S7 Connector reads values from PLCs, it sends them as JSON
-  // messages to the runtime's stdin for real-time node value updates.
-  //
-  // The S7 Connector uses database UUIDs as nodeId, but the C runtime
-  // expects OPC UA node IDs (ns=X;s=Path.Name). We build a cached lookup map.
-  let uuidToOpcUaId: Map<string, string> | null = null;
-
-  function buildNodeIdMap(): Map<string, string> {
-    const config = configGenerator.generate();
-    const db = database.getConnection();
-    const map = new Map<string, string>();
-    for (const ns of config.namespaces) {
-      for (const node of ns.nodes) {
-        const row = db.prepare(
-          `SELECT n.id FROM nodes n
-           JOIN namespaces ns ON n.namespace_id = ns.id
-           WHERE n.name = ? AND ns.name = ?`
-        ).get(node.name, ns.name) as { id: string } | undefined;
-        if (row) {
-          map.set(row.id, node.nodeId);
-        }
-      }
-    }
-    return map;
-  }
-
-  s7Connector.onValueUpdate((updates) => {
-    const status = processManager.getStatus();
-    if (status.state !== 'running') {
-      logService.debug('S7-IPC', `Skipping ${updates.length} update(s): runtime not running`);
-      return;
-    }
-
-    // Lazily build the map (invalidated on address space changes via auto-reload)
-    if (!uuidToOpcUaId) {
-      uuidToOpcUaId = buildNodeIdMap();
-      logService.info('S7-IPC', `Built node ID map: ${uuidToOpcUaId.size} mapping(s)`);
-    }
-
-    // Resolve UUIDs to OPC UA node IDs
-    const resolvedUpdates = updates
-      .filter((u) => {
-        if (!uuidToOpcUaId!.has(u.nodeId)) {
-          // Rebuild map in case a new node was added
-          logService.warn('S7-IPC', `Node UUID ${u.nodeId} not in map, rebuilding...`);
-          uuidToOpcUaId = buildNodeIdMap();
-          return uuidToOpcUaId.has(u.nodeId);
-        }
-        return true;
-      })
-      .map((u) => ({
-        nodeId: uuidToOpcUaId!.get(u.nodeId)!,
-        value: u.value,
-        quality: u.quality,
-        timestamp: u.timestamp.toISOString(),
-      }));
-
-    if (resolvedUpdates.length === 0) {
-      logService.warn('S7-IPC', `No updates resolved (${updates.length} input, 0 matched)`);
-      return;
-    }
-
-    const message = JSON.stringify({
-      type: 'value_update',
-      updates: resolvedUpdates,
-    });
-
-    try {
-      processManager.writeToStdin(message + '\n');
-      logService.debug('S7-IPC', `Sent ${resolvedUpdates.length} value(s) to runtime stdin`);
-    } catch (err) {
-      logService.error('S7-IPC', `Failed to write to stdin: ${(err as Error).message}`);
-    }
-  });
+  // Wire S7 value updates to the runtime process via the IPC bridge.
+  // The bridge resolves database UUIDs to OPC UA node IDs and writes
+  // JSON messages to the runtime's stdin for real-time node value updates.
+  const ipcBridge = new S7IpcBridge(configGenerator, processManager, database);
+  s7Connector.onValueUpdate((updates) => ipcBridge.handleValueUpdates(updates));
 
   // Register crash handler for logging
   processManager.onCrash((reason) => {
     console.error(`OPC UA Runtime crashed: ${reason}`);
+    logService.error('Server', `OPC UA Runtime crashed: ${reason}`);
     // Stop S7 polling when the runtime crashes since there's no process to receive updates
     s7Connector.stop();
   });
@@ -159,6 +97,7 @@ async function main(): Promise<void> {
 
   server = app.listen(port, () => {
     console.log(`Control API listening on port ${port} (HTTP)`);
+    logService.info('Server', `Control API listening on port ${port} (HTTP)`);
   });
 
   // ─── Auto-start OPC UA Runtime ──────────────────────────────────────────────
@@ -166,19 +105,23 @@ async function main(): Promise<void> {
     // Initialize PKI directories before starting runtime (Requirement 1.5)
     await tofuManager.initialize();
     console.log('PKI directories initialized.');
+    logService.info('Server', 'PKI directories initialized');
 
     configGenerator.writeToFile(configPath);
     const result = await processManager.start();
     s7Connector.start();
     console.log(`OPC UA Runtime auto-started (PID: ${result.pid})`);
+    logService.info('Server', `OPC UA Runtime auto-started (PID: ${result.pid})`);
   } catch (err) {
     console.error('Failed to auto-start OPC UA Runtime:', (err as Error).message);
+    logService.error('Server', `Failed to auto-start OPC UA Runtime: ${(err as Error).message}`);
     console.error('Use the Dashboard or POST /server/start to start manually.');
   }
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+    logService.info('Server', `Received ${signal}. Shutting down gracefully...`);
 
     // Stop S7 Connector polling
     s7Connector.stop();

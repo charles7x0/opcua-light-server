@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
-import { Database } from '../../src/db/database.js';
-import { NamespaceRepository } from '../../src/db/repositories/namespace-repository.js';
-import { NodeRepository } from '../../src/db/repositories/node-repository.js';
-import { ObjectNodeRepository } from '../../src/db/repositories/object-node-repository.js';
-import { S7Repository } from '../../src/db/repositories/s7-repository.js';
-import type { OpcUaDataType } from '../../src/types/index.js';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fc from "fast-check";
+import { Database } from "../../src/db/database.js";
+import { NamespaceRepository } from "../../src/db/repositories/namespace-repository.js";
+import { NodeRepository } from "../../src/db/repositories/node-repository.js";
+import { ObjectNodeRepository } from "../../src/db/repositories/object-node-repository.js";
+import { S7Repository } from "../../src/db/repositories/s7-repository.js";
+import type { OpcUaDataType } from "../../src/types/index.js";
 
 /**
  * Property 1: Entity Persistence Round-Trip
@@ -16,7 +16,7 @@ import type { OpcUaDataType } from '../../src/types/index.js';
  *
  * **Validates: Requirements 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 7.1, 7.2, 10.1**
  */
-describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip', () => {
+describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip", () => {
   let db: Database;
   let namespaceRepo: NamespaceRepository;
   let nodeRepo: NodeRepository;
@@ -24,7 +24,7 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
   let s7Repo: S7Repository;
 
   beforeEach(() => {
-    db = new Database(':memory:');
+    db = new Database(":memory:");
     namespaceRepo = new NamespaceRepository(db);
     nodeRepo = new NodeRepository(db);
     objectNodeRepo = new ObjectNodeRepository(db);
@@ -42,73 +42,102 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
   const namespaceArb = fc.record({
     name: alphanumericString,
     uri: fc.stringMatching(/^urn:[a-zA-Z][a-zA-Z0-9]{0,19}$/),
-    description: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: undefined }),
+    description: fc.option(fc.string({ minLength: 1, maxLength: 50 }), {
+      nil: undefined,
+    }),
   });
 
   const dataTypes: OpcUaDataType[] = [
-    'Boolean', 'Int16', 'Int32', 'Int64',
-    'UInt16', 'UInt32', 'UInt64',
-    'Float', 'Double', 'String', 'DateTime', 'ByteString',
+    "Boolean",
+    "Int16",
+    "Int32",
+    "Int64",
+    "UInt16",
+    "UInt32",
+    "UInt64",
+    "Float",
+    "Double",
+    "String",
+    "DateTime",
+    "ByteString",
   ];
 
   const dataTypeArb = fc.constantFrom(...dataTypes);
 
-  const initialValueForType = (dataType: OpcUaDataType): fc.Arbitrary<unknown> => {
+  const initialValueForType = (
+    dataType: OpcUaDataType,
+  ): fc.Arbitrary<unknown> => {
     switch (dataType) {
-      case 'Boolean':
+      case "Boolean":
         return fc.boolean();
-      case 'Int16':
+      case "Int16":
         return fc.integer({ min: -32768, max: 32767 });
-      case 'Int32':
+      case "Int32":
         return fc.integer({ min: -2147483648, max: 2147483647 });
-      case 'Int64':
+      case "Int64":
         return fc.integer({ min: -1000000, max: 1000000 });
-      case 'UInt16':
+      case "UInt16":
         return fc.integer({ min: 0, max: 65535 });
-      case 'UInt32':
+      case "UInt32":
         return fc.integer({ min: 0, max: 4294967295 });
-      case 'UInt64':
+      case "UInt64":
         return fc.integer({ min: 0, max: 1000000 });
-      case 'Float':
-      case 'Double':
-        return fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true });
-      case 'String':
+      case "Float":
+      case "Double":
+        return fc.double({
+          min: -1000,
+          max: 1000,
+          noNaN: true,
+          noDefaultInfinity: true,
+        });
+      case "String":
         return fc.string({ minLength: 1, maxLength: 50 });
-      case 'DateTime':
+      case "DateTime":
         return fc.date().map((d) => d.toISOString());
-      case 'ByteString':
+      case "ByteString":
         return fc.string({ minLength: 1, maxLength: 20 });
       default:
         return fc.constant(null);
     }
   };
 
-  const nodeArb = fc.record({
-    name: alphanumericString,
-    dataType: dataTypeArb,
-    description: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: undefined }),
-  }).chain((base) =>
-    fc.record({
-      ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, fc.constant(v)])),
-      initialValue: fc.option(initialValueForType(base.dataType), { nil: undefined }),
-    }) as fc.Arbitrary<{
-      name: string;
-      dataType: OpcUaDataType;
-      description: string | undefined;
-      initialValue: unknown;
-    }>
-  );
+  const nodeArb = fc
+    .record({
+      name: alphanumericString,
+      dataType: dataTypeArb,
+      description: fc.option(fc.string({ minLength: 1, maxLength: 50 }), {
+        nil: undefined,
+      }),
+    })
+    .chain(
+      (base) =>
+        fc.record({
+          ...Object.fromEntries(
+            Object.entries(base).map(([k, v]) => [k, fc.constant(v)]),
+          ),
+          initialValue: fc.option(initialValueForType(base.dataType), {
+            nil: undefined,
+          }),
+        }) as fc.Arbitrary<{
+          name: string;
+          dataType: OpcUaDataType;
+          description: string | undefined;
+          initialValue: unknown;
+        }>,
+    );
 
   const objectNodeNameArb = alphanumericString;
 
   const s7ConnectionArb = fc.record({
     name: alphanumericString,
-    host: fc.tuple(
-      fc.integer({ min: 1, max: 254 }),
-      fc.integer({ min: 0, max: 255 }),
-      fc.integer({ min: 0, max: 255 }),
-      fc.integer({ min: 1, max: 254 }),
-    ).map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`),
+    host: fc
+      .tuple(
+        fc.integer({ min: 1, max: 254 }),
+        fc.integer({ min: 0, max: 255 }),
+        fc.integer({ min: 0, max: 255 }),
+        fc.integer({ min: 1, max: 254 }),
+      )
+      .map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`),
     rack: fc.integer({ min: 0, max: 7 }),
     slot: fc.integer({ min: 0, max: 31 }),
     pollingIntervalMs: fc.integer({ min: 100, max: 10000 }),
@@ -116,14 +145,13 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
     enabled: fc.boolean(),
   });
 
-  const s7MappingPlcAddressArb = fc.tuple(
-    fc.integer({ min: 1, max: 999 }),
-    fc.integer({ min: 0, max: 9999 }),
-  ).map(([dbNum, offset]) => `DB${dbNum},REAL${offset}`);
+  const s7MappingPlcAddressArb = fc
+    .tuple(fc.integer({ min: 1, max: 999 }), fc.integer({ min: 0, max: 9999 }))
+    .map(([dbNum, offset]) => `DB${dbNum},REAL${offset}`);
 
   // --- Property Tests ---
 
-  it('namespace persistence round-trip', () => {
+  it("namespace persistence round-trip", () => {
     let counter = 0;
     fc.assert(
       fc.property(namespaceArb, (input) => {
@@ -148,11 +176,11 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
           expect(retrieved!.description).toBe(input.description);
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
-  it('node persistence round-trip', () => {
+  it("node persistence round-trip", () => {
     fc.assert(
       fc.property(nodeArb, (input) => {
         // Create a namespace first (required for nodes)
@@ -164,7 +192,7 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         expect(nsResult.success).toBe(true);
         if (!nsResult.success) return;
 
-        const node = nodeRepo.create({
+        const nodeResult = nodeRepo.create({
           name: input.name,
           namespaceId: nsResult.data.id,
           dataType: input.dataType,
@@ -172,7 +200,10 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
           description: input.description,
         });
 
-        const retrieved = nodeRepo.findById(node.id);
+        expect(nodeResult.success).toBe(true);
+        if (!nodeResult.success) return;
+
+        const retrieved = nodeRepo.findById(nodeResult.data.id);
         expect(retrieved).not.toBeNull();
         expect(retrieved!.name).toBe(input.name);
         expect(retrieved!.namespaceId).toBe(nsResult.data.id);
@@ -185,11 +216,11 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
           expect(retrieved!.description).toBe(input.description);
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
-  it('object node persistence round-trip', () => {
+  it("object node persistence round-trip", () => {
     fc.assert(
       fc.property(objectNodeNameArb, (objectNodeName) => {
         // Create a namespace first (required for object nodes)
@@ -218,11 +249,11 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         expect(found!.name).toBe(objectNodeName);
         expect(found!.namespaceId).toBe(nsResult.data.id);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
-  it('S7 connection persistence round-trip', () => {
+  it("S7 connection persistence round-trip", () => {
     fc.assert(
       fc.property(s7ConnectionArb, (input) => {
         const result = s7Repo.createConnection({
@@ -248,11 +279,11 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         expect(retrieved!.reconnectIntervalMs).toBe(input.reconnectIntervalMs);
         expect(retrieved!.enabled).toBe(input.enabled);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
-  it('S7 mapping persistence round-trip', () => {
+  it("S7 mapping persistence round-trip", () => {
     fc.assert(
       fc.property(s7MappingPlcAddressArb, (plcAddress) => {
         // Create prerequisite entities: namespace, node, and S7 connection
@@ -265,16 +296,18 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         if (!nsResult.success) return;
 
         const nodeName = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const node = nodeRepo.create({
+        const nodeResult = nodeRepo.create({
           name: nodeName,
           namespaceId: nsResult.data.id,
-          dataType: 'Float',
+          dataType: "Float",
         });
+        expect(nodeResult.success).toBe(true);
+        if (!nodeResult.success) return;
 
         const connName = `conn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const connResult = s7Repo.createConnection({
           name: connName,
-          host: '192.168.1.1',
+          host: "192.168.1.1",
           rack: 0,
           slot: 1,
         });
@@ -283,7 +316,7 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
 
         const mappingResult = s7Repo.createMapping({
           connectionId: connResult.data.id,
-          nodeId: node.id,
+          nodeId: nodeResult.data.id,
           plcAddress: plcAddress,
         });
 
@@ -293,10 +326,10 @@ describe('Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         const retrieved = s7Repo.findMappingById(mappingResult.data.id);
         expect(retrieved).not.toBeNull();
         expect(retrieved!.connectionId).toBe(connResult.data.id);
-        expect(retrieved!.nodeId).toBe(node.id);
+        expect(retrieved!.nodeId).toBe(nodeResult.data.id);
         expect(retrieved!.plcAddress).toBe(plcAddress);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });

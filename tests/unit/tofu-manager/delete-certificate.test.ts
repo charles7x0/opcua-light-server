@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { TofuManager } from '../../../src/tofu-manager/index.js';
+import { logService } from '../../../src/log/index.js';
 
 /**
  * Creates a mock ProcessManager with the minimum interface needed by TofuManager.
@@ -54,32 +55,34 @@ describe('TofuManager.deleteCertificate()', () => {
     const filePath = join(trustedDir, `${thumbprint}.der`);
     writeFileSync(filePath, Buffer.from([0x30, 0x82, 0x01, 0x00]));
 
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'info').mockImplementation(() => {});
 
     manager.deleteCertificate(thumbprint);
 
     expect(existsSync(filePath)).toBe(false);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      `[TofuManager] Certificate deleted: ${thumbprint}`
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      `Certificate deleted: ${thumbprint}`
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('successfully deletes a certificate from the rejected store', () => {
     const filePath = join(rejectedDir, `${thumbprint}.der`);
     writeFileSync(filePath, Buffer.from([0x30, 0x82, 0x01, 0x00]));
 
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'info').mockImplementation(() => {});
 
     manager.deleteCertificate(thumbprint);
 
     expect(existsSync(filePath)).toBe(false);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      `[TofuManager] Certificate deleted: ${thumbprint}`
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      `Certificate deleted: ${thumbprint}`
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('calls signalReload after successful delete', () => {

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { TofuManager } from '../../../src/tofu-manager/index.js';
+import { logService } from '../../../src/log/index.js';
 
 /**
  * Creates a mock ProcessManager with the minimum interface needed by TofuManager.
@@ -123,13 +124,14 @@ describe('TofuManager.rejectCertificate()', () => {
   it('logs the rejection event', () => {
     const thumbprint = '1234567890abcdef1234567890abcdef12345678';
     writeFileSync(join(trustedDir, `${thumbprint}.der`), generateFakeDerCert());
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'info').mockImplementation(() => {});
 
     manager.rejectCertificate(thumbprint);
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      `[TofuManager] Certificate rejected: ${thumbprint}`
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      `Certificate rejected: ${thumbprint}`
     );
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

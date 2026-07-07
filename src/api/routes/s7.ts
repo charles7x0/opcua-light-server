@@ -8,6 +8,7 @@ import type {
   ErrorResponse,
 } from '../../types/api.js';
 import type { S7ConnectionStatus } from '../../types/index.js';
+import { escapeCsvField, parseCsvLine } from '../../utils/csv.js';
 
 /**
  * Creates the S7 Connector API router.
@@ -537,58 +538,4 @@ export function createS7Router(repository: S7Repository, s7Connector?: S7Connect
   return router;
 }
 
-// ─── CSV Utilities ──────────────────────────────────────────────────────────
-
-/**
- * Escape a field for CSV output (RFC 4180 compliant).
- */
-function escapeCsvField(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-/**
- * Parse a single CSV line respecting quoted fields (RFC 4180).
- */
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  let i = 0;
-
-  while (i < line.length) {
-    const char = line[i];
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
-          i += 2;
-        } else {
-          inQuotes = false;
-          i++;
-        }
-      } else {
-        current += char;
-        i++;
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-        i++;
-      } else if (char === ',') {
-        fields.push(current);
-        current = '';
-        i++;
-      } else {
-        current += char;
-        i++;
-      }
-    }
-  }
-
-  fields.push(current);
-  return fields;
-}
+// ─── CSV Utilities imported from src/utils/csv.ts ───────────────────────────

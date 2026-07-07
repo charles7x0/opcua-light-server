@@ -95,32 +95,31 @@ describe('Property 6: Uniqueness Constraints Prevent Duplicates', { timeout: 600
 
           const namespaceId = nsResult.data.id;
 
-          const firstNode = nodeRepo.create({
+          const firstResult = nodeRepo.create({
             name: nodeName,
             namespaceId,
             dataType: dataType1,
           });
 
-          let duplicateError: Error | null = null;
-          try {
-            nodeRepo.create({
-              name: nodeName,
-              namespaceId,
-              dataType: dataType2,
-            });
-          } catch (err) {
-            duplicateError = err as Error;
+          if (!firstResult.success) return;
+
+          const duplicateResult = nodeRepo.create({
+            name: nodeName,
+            namespaceId,
+            dataType: dataType2,
+          });
+
+          expect(duplicateResult.success).toBe(false);
+          if (!duplicateResult.success) {
+            expect(duplicateResult.error.code).toBe('DUPLICATE_ERROR');
+            expect(duplicateResult.error.message).toContain(nodeName);
           }
 
-          expect(duplicateError).not.toBeNull();
-          expect((duplicateError as any).isDuplicate).toBe(true);
-          expect(duplicateError!.message).toContain(nodeName);
-
-          const original = nodeRepo.findById(firstNode.id);
+          const original = nodeRepo.findById(firstResult.data.id);
           expect(original).not.toBeNull();
-          expect(original!.name).toBe(firstNode.name);
-          expect(original!.dataType).toBe(firstNode.dataType);
-          expect(original!.namespaceId).toBe(firstNode.namespaceId);
+          expect(original!.name).toBe(firstResult.data.name);
+          expect(original!.dataType).toBe(firstResult.data.dataType);
+          expect(original!.namespaceId).toBe(firstResult.data.namespaceId);
         }
       ),
       { numRuns: 100 }
@@ -280,23 +279,25 @@ describe('Property 6: Uniqueness Constraints Prevent Duplicates', { timeout: 600
           });
           if (!ns1.success || !ns2.success) return;
 
-          const node1 = nodeRepo.create({
+          const result1 = nodeRepo.create({
             name: nodeName,
             namespaceId: ns1.data.id,
             dataType,
           });
 
-          const node2 = nodeRepo.create({
+          const result2 = nodeRepo.create({
             name: nodeName,
             namespaceId: ns2.data.id,
             dataType,
           });
 
-          expect(node1.id).toBeDefined();
-          expect(node2.id).toBeDefined();
-          expect(node1.id).not.toBe(node2.id);
-          expect(node1.name).toBe(nodeName);
-          expect(node2.name).toBe(nodeName);
+          expect(result1.success).toBe(true);
+          expect(result2.success).toBe(true);
+          if (!result1.success || !result2.success) return;
+
+          expect(result1.data.id).not.toBe(result2.data.id);
+          expect(result1.data.name).toBe(nodeName);
+          expect(result2.data.name).toBe(nodeName);
         }
       ),
       { numRuns: 100 }

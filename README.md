@@ -240,8 +240,9 @@ opcua-light-server/
 │   ├── config-generator/ # Generates JSON config for the runtime
 │   ├── db/               # SQLite schema, database class, repositories
 │   ├── process-manager/  # Manages the open62541 child process
-│   ├── s7-connector/     # S7 PLC polling and value updates
+│   ├── s7-connector/     # S7 PLC polling, value updates, and IPC bridge to runtime
 │   ├── types/            # TypeScript domain types and DTOs
+│   ├── utils/            # Shared utilities (CSV parsing, etc.)
 │   └── shared/           # Shared utilities
 ├── web/                  # React web UI (Vite + Tailwind CSS)
 │   └── src/

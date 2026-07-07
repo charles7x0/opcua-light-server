@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { TofuManager } from '../../../src/tofu-manager/index.js';
+import { logService } from '../../../src/log/index.js';
 
 /**
  * Creates a mock ProcessManager with the minimum interface needed by TofuManager.
@@ -83,14 +84,15 @@ describe('TofuManager.initialize()', () => {
     const invalidBase = join(testDir, '\0invalid');
     const manager = new TofuManager(invalidBase, processManager);
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'error').mockImplementation(() => {});
 
     await expect(manager.initialize()).rejects.toThrow();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[TofuManager] Failed to create PKI directories:')
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      expect.stringContaining('Failed to create PKI directories:')
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('creates intermediate parent directories', async () => {

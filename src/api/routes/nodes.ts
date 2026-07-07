@@ -5,6 +5,8 @@ import type { ErrorResponse } from '../../types/api.js';
 import type { CreateNodeRequest, UpdateNodeRequest } from '../../types/api.js';
 import type { Database } from '../../db/database.js';
 import type { OpcUaDataType } from '../../types/index.js';
+import type { DomainError } from '../../types/result.js';
+import { escapeCsvField, parseCsvLine } from '../../utils/csv.js';
 
 /** Supported OPC UA data types for CSV import validation. */
 const VALID_DATA_TYPES: OpcUaDataType[] = [
@@ -25,26 +27,22 @@ export function createNodeRoutes(repository: NodeRepository, database?: Database
 
   // POST /api/nodes - Create a node
   router.post('/', (req: Request, res: Response) => {
-    try {
-      const body = req.body as CreateNodeRequest;
-      const node = repository.create(body);
-      res.status(201).json(node);
-    } catch (error: unknown) {
-      handleRepositoryError(res, error);
+    const body = req.body as CreateNodeRequest;
+    const result = repository.create(body);
+    if (!result.success) {
+      mapDomainErrorToResponse(res, result.error);
+      return;
     }
+    res.status(201).json(result.data);
   });
 
   // GET /api/nodes - List nodes (optional ?namespaceId filter)
   router.get('/', (req: Request, res: Response) => {
-    try {
-      const namespaceId = typeof req.query.namespaceId === 'string'
-        ? req.query.namespaceId
-        : undefined;
-      const nodes = repository.findAll(namespaceId);
-      res.json(nodes);
-    } catch (error: unknown) {
-      handleRepositoryError(res, error);
-    }
+    const namespaceId = typeof req.query.namespaceId === 'string'
+      ? req.query.namespaceId
+      : undefined;
+    const nodes = repository.findAll(namespaceId);
+    res.json(nodes);
   });
 
   // ─── CSV Export ─────────────────────────────────────────────────────────────
@@ -110,7 +108,7 @@ export function createNodeRoutes(repository: NodeRepository, database?: Database
       res.setHeader('Content-Disposition', 'attachment; filename="nodes.csv"');
       res.send(csv);
     } catch (error: unknown) {
-      handleRepositoryError(res, error);
+      handleGenericError(res, error);
     }
   });
 
@@ -231,20 +229,19 @@ export function createNodeRoutes(repository: NodeRepository, database?: Database
         }
 
         // Create node
-        try {
-          const createReq: CreateNodeRequest = {
-            name: name.trim(),
-            namespaceId,
-            objectNodeId: objectNodeId ?? undefined,
-            dataType: dataType.trim() as OpcUaDataType,
-            initialValue,
-            description: description?.trim() || undefined,
-          };
-          repository.create(createReq);
+        const createReq: CreateNodeRequest = {
+          name: name.trim(),
+          namespaceId,
+          objectNodeId: objectNodeId ?? undefined,
+          dataType: dataType.trim() as OpcUaDataType,
+          initialValue,
+          description: description?.trim() || undefined,
+        };
+        const createResult = repository.create(createReq);
+        if (createResult.success) {
           results.push({ row: i + 1, success: true, name: name.trim() });
-        } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : 'Unknown error';
-          results.push({ row: i + 1, success: false, name: name.trim(), error: msg });
+        } else {
+          results.push({ row: i + 1, success: false, name: name.trim(), error: createResult.error.message });
         }
       }
 
@@ -256,7 +253,7 @@ export function createNodeRoutes(repository: NodeRepository, database?: Database
         results,
       });
     } catch (error: unknown) {
-      handleRepositoryError(res, error);
+      handleGenericError(res, error);
     }
   });
 
@@ -264,181 +261,88 @@ export function createNodeRoutes(repository: NodeRepository, database?: Database
 
   // GET /api/nodes/:id - Get node by ID
   router.get('/:id', (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
-      const node = repository.findById(id);
-      if (!node) {
-        const errorResponse: ErrorResponse = {
-          error: {
-            code: 'NOT_FOUND',
-            message: `Node with id '${id}' not found`,
-          },
-        };
-        res.status(404).json(errorResponse);
-        return;
-      }
-      res.json(node);
-    } catch (error: unknown) {
-      handleRepositoryError(res, error);
+    const id = req.params.id as string;
+    const node = repository.findById(id);
+    if (!node) {
+      const errorResponse: ErrorResponse = {
+        error: {
+          code: 'NOT_FOUND',
+          message: `Node with id '${id}' not found`,
+        },
+      };
+      res.status(404).json(errorResponse);
+      return;
     }
+    res.json(node);
   });
 
   // PUT /api/nodes/:id - Update a node
   router.put('/:id', (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
-      const body = req.body as UpdateNodeRequest;
-      const node = repository.update(id, body);
-      res.json(node);
-    } catch (error: unknown) {
-      handleRepositoryError(res, error);
+    const id = req.params.id as string;
+    const body = req.body as UpdateNodeRequest;
+    const result = repository.update(id, body);
+    if (!result.success) {
+      mapDomainErrorToResponse(res, result.error);
+      return;
     }
+    res.json(result.data);
   });
 
   // DELETE /api/nodes/:id - Delete a node
   router.delete('/:id', (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
-      const deleted = repository.delete(id);
-      if (!deleted) {
-        const errorResponse: ErrorResponse = {
-          error: {
-            code: 'NOT_FOUND',
-            message: `Node with id '${id}' not found`,
-          },
-        };
-        res.status(404).json(errorResponse);
-        return;
-      }
-      res.status(204).send();
-    } catch (error: unknown) {
-      handleRepositoryError(res, error);
+    const id = req.params.id as string;
+    const result = repository.delete(id);
+    if (!result.success) {
+      mapDomainErrorToResponse(res, result.error);
+      return;
     }
+    res.status(204).send();
   });
 
   return router;
 }
 
 /**
- * Maps repository errors to appropriate HTTP error responses.
+ * Maps a DomainError to the appropriate HTTP error response.
  */
-function handleRepositoryError(res: Response, error: unknown): void {
-  if (!(error instanceof Error)) {
-    const errorResponse: ErrorResponse = {
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
-      },
-    };
-    res.status(500).json(errorResponse);
-    return;
-  }
-
-  const err = error as Error & {
-    validationErrors?: Array<{ field: string; message: string }>;
-    isDuplicate?: boolean;
-    isNotFound?: boolean;
-  };
-
-  if (err.isNotFound) {
-    const errorResponse: ErrorResponse = {
-      error: {
-        code: 'NOT_FOUND',
-        message: err.message,
-      },
-    };
-    res.status(404).json(errorResponse);
-    return;
-  }
-
-  if (err.isDuplicate) {
-    const errorResponse: ErrorResponse = {
-      error: {
-        code: 'DUPLICATE_ERROR',
-        message: err.message,
-        details: err.validationErrors,
-      },
-    };
-    res.status(409).json(errorResponse);
-    return;
-  }
-
-  if (err.validationErrors) {
-    const errorResponse: ErrorResponse = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: err.message,
-        details: err.validationErrors,
-      },
-    };
-    res.status(400).json(errorResponse);
-    return;
+function mapDomainErrorToResponse(res: Response, error: DomainError): void {
+  let statusCode: number;
+  switch (error.code) {
+    case 'NOT_FOUND':
+      statusCode = 404;
+      break;
+    case 'DUPLICATE_ERROR':
+      statusCode = 409;
+      break;
+    case 'VALIDATION_ERROR':
+      statusCode = 400;
+      break;
+    default:
+      statusCode = 500;
   }
 
   const errorResponse: ErrorResponse = {
     error: {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    },
+  };
+  res.status(statusCode).json(errorResponse);
+}
+
+/**
+ * Handles generic/unexpected errors from CSV import/export operations.
+ */
+function handleGenericError(res: Response, error: unknown): void {
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+  const errorResponse: ErrorResponse = {
+    error: {
       code: 'INTERNAL_ERROR',
-      message: err.message || 'An unexpected error occurred',
+      message,
     },
   };
   res.status(500).json(errorResponse);
 }
 
-// ─── CSV Utilities ──────────────────────────────────────────────────────────
-
-/**
- * Escape a field for CSV output (RFC 4180 compliant).
- * Wraps in double quotes if the field contains commas, quotes, or newlines.
- */
-function escapeCsvField(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-/**
- * Parse a single CSV line respecting quoted fields (RFC 4180).
- */
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  let i = 0;
-
-  while (i < line.length) {
-    const char = line[i];
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          // Escaped quote
-          current += '"';
-          i += 2;
-        } else {
-          // End of quoted field
-          inQuotes = false;
-          i++;
-        }
-      } else {
-        current += char;
-        i++;
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-        i++;
-      } else if (char === ',') {
-        fields.push(current);
-        current = '';
-        i++;
-      } else {
-        current += char;
-        i++;
-      }
-    }
-  }
-
-  fields.push(current);
-  return fields;
-}
+// ─── CSV Utilities imported from src/utils/csv.ts ───────────────────────────

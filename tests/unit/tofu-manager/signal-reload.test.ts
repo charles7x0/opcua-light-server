@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TofuManager } from '../../../src/tofu-manager/index.js';
+import { logService } from '../../../src/log/index.js';
 
 /**
  * Creates a mock ProcessManager with the minimum interface needed by TofuManager.
@@ -37,55 +38,58 @@ describe('TofuManager.signalReload()', () => {
 
   it('does not write to stdin when runtime is stopped', () => {
     processManager.getStatus.mockReturnValue({ state: 'stopped' });
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'info').mockImplementation(() => {});
 
     manager.signalReload();
 
     expect(processManager.writeToStdin).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[TofuManager] Runtime not running, skipping reload signal'
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      'Runtime not running, skipping reload signal'
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('does not write to stdin when runtime is in error state', () => {
     processManager.getStatus.mockReturnValue({ state: 'error' });
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'info').mockImplementation(() => {});
 
     manager.signalReload();
 
     expect(processManager.writeToStdin).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[TofuManager] Runtime not running, skipping reload signal'
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      'Runtime not running, skipping reload signal'
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('logs a warning when writeToStdin returns false', () => {
     processManager.getStatus.mockReturnValue({ state: 'running' });
     processManager.writeToStdin.mockReturnValue(false);
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'warn').mockImplementation(() => {});
 
     manager.signalReload();
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[TofuManager] Failed to write reload signal to stdin'
+    expect(logSpy).toHaveBeenCalledWith(
+      'TofuManager',
+      'Failed to write reload signal to stdin'
     );
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('does not log a warning when writeToStdin returns true', () => {
     processManager.getStatus.mockReturnValue({ state: 'running' });
     processManager.writeToStdin.mockReturnValue(true);
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(logService, 'warn').mockImplementation(() => {});
 
     manager.signalReload();
 
-    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

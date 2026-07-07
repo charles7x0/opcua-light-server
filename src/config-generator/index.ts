@@ -1,6 +1,8 @@
 import { existsSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import type { Database } from '../db/database.js';
+import type { NamespaceRepository } from '../db/repositories/namespace-repository.js';
+import type { NodeRepository } from '../db/repositories/node-repository.js';
 import type {
   AddressSpaceConfig,
   SecurityConfigOutput,
@@ -10,6 +12,7 @@ import type {
   S7MappingConfig,
 } from '../types/config.js';
 import type { OpcUaDataType } from '../types/index.js';
+import { logService } from '../log/index.js';
 
 /** Row shape from the namespaces table. */
 interface NamespaceRow {
@@ -55,7 +58,11 @@ interface S7MappingRow {
  * the JSON configuration file consumed by the open62541 runtime.
  */
 export class ConfigGenerator {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly namespaceRepo?: NamespaceRepository,
+    private readonly nodeRepo?: NodeRepository,
+  ) {}
 
   /**
    * Generate the full AddressSpaceConfig from the current database state.
@@ -106,8 +113,9 @@ export class ConfigGenerator {
     // If encryption is requested but cert/key paths are not configured,
     // fall back to None to avoid a runtime crash (exit code 1).
     if (row.mode !== 'None' && (!row.certificate_path || !row.private_key_path)) {
-      console.warn(
-        `[ConfigGenerator] Security mode "${row.mode}" requires certificatePath and privateKeyPath. ` +
+      logService.warn(
+        'ConfigGenerator',
+        `Security mode "${row.mode}" requires certificatePath and privateKeyPath. ` +
         `Falling back to "None" because one or both are missing.`
       );
       return { mode: 'None' };
@@ -135,8 +143,9 @@ export class ConfigGenerator {
 
       if (!existsSync(pkiTrustedPath) || !existsSync(pkiRejectedPath)) {
         const missing = !existsSync(pkiTrustedPath) ? 'pkiTrustedPath' : 'pkiRejectedPath';
-        console.warn(
-          `[ConfigGenerator] Security mode "${row.mode}" requires PKI directories but ` +
+        logService.warn(
+          'ConfigGenerator',
+          `Security mode "${row.mode}" requires PKI directories but ` +
           `${missing} does not exist. Falling back to mode "None".`
         );
         return { mode: 'None' };

@@ -238,6 +238,8 @@ export class Database {
 
   /**
    * Execute a write operation. Throws if the database is not accessible.
+   * Clears all cached reads after a successful write to ensure subsequent
+   * reads return fresh data.
    */
   write<T>(writeFn: (db: BetterSqlite3.Database) => T): T {
     if (!this.isAccessible()) {
@@ -245,7 +247,9 @@ export class Database {
         'Database is not accessible. Write operations are unavailable.'
       );
     }
-    return writeFn(this.db!);
+    const result = writeFn(this.db!);
+    this.clearCache();
+    return result;
   }
 
   /**

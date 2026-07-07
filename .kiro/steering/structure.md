@@ -18,7 +18,8 @@ opcua-light-server/
 │   ├── log/                      # Logging utilities (in-memory log service)
 │   ├── process-manager/          # Manages the open62541 child process lifecycle
 │   ├── s7-connector/             # S7 PLC polling, reconnection, and value update logic
-│   └── types/                    # Domain types, DTOs, and declaration files
+│   ├── types/                    # Domain types, DTOs, and declaration files
+│   └── utils/                    # Shared utilities (CSV parsing/serialization)
 ├── web/                          # React web UI (separate npm package)
 │   └── src/
 │       ├── components/           # Shared UI primitives

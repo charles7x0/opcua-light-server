@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { Database } from '../../src/db/database.js';
 import { ConfigGenerator } from '../../src/config-generator/index.js';
+import { logService } from '../../src/log/index.js';
 
 describe('ConfigGenerator', () => {
   let db: Database;
@@ -61,7 +62,7 @@ describe('ConfigGenerator', () => {
         "UPDATE security_config SET mode = 'SignAndEncrypt', certificate_path = NULL, private_key_path = NULL WHERE id = 1"
       ).run();
 
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(logService, 'warn').mockImplementation(() => {});
 
       const config = generator.generate();
 
@@ -69,6 +70,7 @@ describe('ConfigGenerator', () => {
       expect(config.security.certificatePath).toBeUndefined();
       expect(config.security.privateKeyPath).toBeUndefined();
       expect(warnSpy).toHaveBeenCalledWith(
+        'ConfigGenerator',
         expect.stringContaining('Falling back to "None"')
       );
 
@@ -81,7 +83,7 @@ describe('ConfigGenerator', () => {
         "UPDATE security_config SET mode = 'Sign', certificate_path = NULL, private_key_path = '/certs/server.key' WHERE id = 1"
       ).run();
 
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(logService, 'warn').mockImplementation(() => {});
 
       const config = generator.generate();
 

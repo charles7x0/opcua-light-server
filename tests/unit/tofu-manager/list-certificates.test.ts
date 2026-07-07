@@ -4,6 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import forge from 'node-forge';
 import { TofuManager } from '../../../src/tofu-manager/index.js';
+import { logService } from '../../../src/log/index.js';
 
 /**
  * Creates a mock ProcessManager with the minimum interface needed by TofuManager.
@@ -191,7 +192,7 @@ describe('TofuManager.listCertificates()', () => {
     writeFileSync(join(trustedDir, `${'b'.repeat(40)}.der`), Buffer.from('not a certificate'));
     writeFileSync(join(trustedDir, `${'c'.repeat(40)}.der`), Buffer.alloc(0));
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logService, 'warn').mockImplementation(() => {});
 
     const result = manager.listCertificates();
 
