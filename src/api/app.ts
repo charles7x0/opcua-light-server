@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
+import swaggerUi from 'swagger-ui-express';
 import type { Database } from '../db/database.js';
 import type { ProcessManager } from '../process-manager/index.js';
 import type { ConfigGenerator } from '../config-generator/index.js';
@@ -53,6 +54,17 @@ export function createApp(deps: AppDependencies): Express {
 
   // ─── Body Parsing ───────────────────────────────────────────────────────────
   app.use(express.json());
+
+  // ─── Swagger UI (API Documentation) ────────────────────────────────────────
+  const __filename_app = fileURLToPath(import.meta.url);
+  const __dirname_app = path.dirname(__filename_app);
+  const openapiPath = path.resolve(__dirname_app, '../../docs/openapi.json');
+  if (fs.existsSync(openapiPath)) {
+    const openapiSpec = JSON.parse(fs.readFileSync(openapiPath, 'utf-8'));
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec, {
+      customSiteTitle: 'OPC UA Light Server - API Docs',
+    }));
+  }
 
   // ─── Repositories ───────────────────────────────────────────────────────────
   const nodeRepo = new NodeRepository(database);

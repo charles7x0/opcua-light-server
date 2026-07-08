@@ -29,6 +29,7 @@
     "jsonwebtoken": "^9.0.2",
     "node-forge": "^1.4.0",
     "nodes7": "^0.3.16",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
@@ -44,6 +45,7 @@
     "@types/pidusage": "^2.0.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "fast-check": "^3.23.0",

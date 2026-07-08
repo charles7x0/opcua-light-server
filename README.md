@@ -167,6 +167,14 @@ curl -X PUT http://localhost:3100/api/security/policy \
 
 ## API Reference
 
+Interactive API documentation is available via Swagger UI at:
+
+```
+http://localhost:3100/api/docs
+```
+
+The OpenAPI 3.0 spec is located at [`docs/openapi.json`](docs/openapi.json).
+
 ### Nodes
 
 | Method | Endpoint | Description |
