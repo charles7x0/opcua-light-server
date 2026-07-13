@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import { Dashboard } from '../screens/dashboard/Dashboard';
 import { AddressSpaceSection } from '../screens/address-space/AddressSpaceSection';
 import { SecuritySettings } from '../screens/security/SecuritySettings';
-import { S7ConnectionManager } from '../screens/s7/S7ConnectionManager';
+import { ConnectorsManager } from '../screens/connectors/ConnectorsManager';
 import { NavBar, NavButton } from './NavBar';
 import { StatusBar } from './StatusBar';
 
-type Section = 'dashboard' | 'address-space' | 'security' | 's7';
+type Section = 'dashboard' | 'address-space' | 'security' | 'connectors';
 
 const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'address-space', label: 'Address Space', icon: '🌐' },
   { id: 'security', label: 'Security', icon: '🔒' },
-  { id: 's7', label: 'S7 Connector', icon: '🔌' },
+  { id: 'connectors', label: 'Connectors', icon: '🔌' },
 ];
 
 function App() {
@@ -46,7 +46,7 @@ function App() {
         {activeSection === 'dashboard' && <Dashboard />}
         {activeSection === 'address-space' && <AddressSpaceSection />}
         {activeSection === 'security' && <SecuritySettings />}
-        {activeSection === 's7' && <S7ConnectionManager />}
+        {activeSection === 'connectors' && <ConnectorsManager />}
       </main>
 
       <StatusBar />

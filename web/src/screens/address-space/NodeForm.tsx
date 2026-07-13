@@ -289,10 +289,10 @@ export function NodeForm({ node, onSuccess, onCancel }: NodeFormProps) {
             type="button"
             variant="ghost"
             size="xs"
-            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 's7' }))}
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'connectors' }))}
             className="!inline !p-0 text-primary-600 hover:text-primary-800 underline"
           >
-            Connect to S7 PLC variable
+            Connect to a device variable
           </Button>
           {' '}after creating the node.
         </p>
