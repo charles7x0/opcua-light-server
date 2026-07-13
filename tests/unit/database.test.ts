@@ -37,9 +37,9 @@ describe('Database', () => {
       expect(tableNames).toContain('s7_mappings');
     });
 
-    it('should set schema version to 3', () => {
+    it('should set schema version to 4', () => {
       db = new Database(':memory:');
-      expect(db.getSchemaVersion()).toBe(3);
+      expect(db.getSchemaVersion()).toBe(4);
     });
 
     it('should insert default security config row', () => {

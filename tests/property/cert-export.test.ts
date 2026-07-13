@@ -33,13 +33,32 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(() => ({ data: undefined, isError: false })),
 }));
 
-vi.mock('../../web/src/api.js', () => ({
+vi.mock('../../web/src/api/index.js', () => ({
   getServerStatus: vi.fn(),
   getSystemLogs: vi.fn(),
   getSecurityConfig: vi.fn(),
 }));
 
-import { getCertificateHealthColor } from '../../web/src/components/StatusBar.js';
+vi.mock('../../web/src/utils/formatUptime.js', () => ({
+  formatUptime: vi.fn(() => '0s'),
+}));
+
+vi.mock('../../web/src/components/index.js', () => ({
+  StatusDot: vi.fn(),
+  StatusBarItem: vi.fn(),
+  StatusBarAlert: vi.fn(),
+  Button: vi.fn(),
+}));
+
+vi.mock('../../web/src/components/styles.js', () => ({
+  statusDotColors: {},
+}));
+
+vi.mock('../../web/src/layout/LogPanel.js', () => ({
+  LogPanel: vi.fn(),
+}));
+
+import { getCertificateHealthColor } from '../../web/src/layout/StatusBar.js';
 
 import { existsSync, readFileSync } from 'fs';
 import express from 'express';

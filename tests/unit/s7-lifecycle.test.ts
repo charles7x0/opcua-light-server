@@ -1,6 +1,6 @@
 /**
- * Unit tests for S7 Connector lifecycle integration with the server routes.
- * Verifies that S7 Connector starts/stops with the runtime lifecycle.
+ * Unit tests for Connector Registry lifecycle integration with the server routes.
+ * Verifies that connectors start/stop with the runtime lifecycle.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -8,7 +8,7 @@ import express from 'express';
 import { createServerRouter } from '../../src/api/routes/server.js';
 import type { ProcessManager } from '../../src/process-manager/index.js';
 import type { ConfigGenerator } from '../../src/config-generator/index.js';
-import type { S7Connector } from '../../src/s7-connector/index.js';
+import type { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
 
 function createMockProcessManager(): ProcessManager {
   return {
@@ -29,26 +29,25 @@ function createMockConfigGenerator(): ConfigGenerator {
   } as unknown as ConfigGenerator;
 }
 
-function createMockS7Connector(): S7Connector {
+function createMockConnectorRegistry(): ConnectorRegistry {
   return {
-    start: vi.fn(),
-    stop: vi.fn(),
-    addConnection: vi.fn(),
-    removeConnection: vi.fn(),
-    addMapping: vi.fn(),
-    removeMapping: vi.fn(),
-    getStatus: vi.fn().mockReturnValue([]),
+    startAll: vi.fn(),
+    stopAll: vi.fn(),
+    register: vi.fn(),
+    getConnector: vi.fn(),
+    getAggregatedStatus: vi.fn().mockReturnValue([]),
+    getAggregatedValues: vi.fn().mockReturnValue([]),
     onValueUpdate: vi.fn(),
-  } as unknown as S7Connector;
+  } as unknown as ConnectorRegistry;
 }
 
-function createApp(pm: ProcessManager, cg: ConfigGenerator, s7?: S7Connector) {
+function createApp(pm: ProcessManager, cg: ConfigGenerator, registry?: ConnectorRegistry) {
   const app = express();
   app.use(express.json());
   const router = createServerRouter({
     processManager: pm,
     configGenerator: cg,
-    s7Connector: s7,
+    connectorRegistry: registry,
     configFilePath: 'test/config.json',
   });
   app.use('/api/server', router);
@@ -108,21 +107,21 @@ async function makeRequest(
   });
 }
 
-describe('S7 Connector Lifecycle Integration', () => {
+describe('Connector Registry Lifecycle Integration', () => {
   let pm: ProcessManager;
   let cg: ConfigGenerator;
-  let s7: S7Connector;
+  let registry: ConnectorRegistry;
   let app: express.Express;
 
   beforeEach(() => {
     pm = createMockProcessManager();
     cg = createMockConfigGenerator();
-    s7 = createMockS7Connector();
-    app = createApp(pm, cg, s7);
+    registry = createMockConnectorRegistry();
+    app = createApp(pm, cg, registry);
   });
 
   describe('POST /api/server/start', () => {
-    it('should start S7 Connector when runtime starts successfully', async () => {
+    it('should start ConnectorRegistry when runtime starts successfully', async () => {
       const startedAt = new Date('2024-01-15T10:00:00Z');
       (pm.start as ReturnType<typeof vi.fn>).mockResolvedValue({
         pid: 12345,
@@ -132,10 +131,10 @@ describe('S7 Connector Lifecycle Integration', () => {
       const res = await makeRequest(app, 'POST', '/api/server/start');
 
       expect(res.status).toBe(200);
-      expect(s7.start).toHaveBeenCalledOnce();
+      expect(registry.startAll).toHaveBeenCalledOnce();
     });
 
-    it('should not start S7 Connector when runtime fails to start', async () => {
+    it('should not start ConnectorRegistry when runtime fails to start', async () => {
       (pm.start as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('Failed to spawn process: no PID assigned')
       );
@@ -143,10 +142,10 @@ describe('S7 Connector Lifecycle Integration', () => {
       const res = await makeRequest(app, 'POST', '/api/server/start');
 
       expect(res.status).toBe(500);
-      expect(s7.start).not.toHaveBeenCalled();
+      expect(registry.startAll).not.toHaveBeenCalled();
     });
 
-    it('should not start S7 Connector when runtime is already running', async () => {
+    it('should not start ConnectorRegistry when runtime is already running', async () => {
       (pm.start as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('Process is already running')
       );
@@ -154,24 +153,24 @@ describe('S7 Connector Lifecycle Integration', () => {
       const res = await makeRequest(app, 'POST', '/api/server/start');
 
       expect(res.status).toBe(409);
-      expect(s7.start).not.toHaveBeenCalled();
+      expect(registry.startAll).not.toHaveBeenCalled();
     });
   });
 
   describe('POST /api/server/stop', () => {
-    it('should stop S7 Connector when runtime stops successfully', async () => {
+    it('should stop ConnectorRegistry when runtime stops successfully', async () => {
       (pm.stop as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
       const res = await makeRequest(app, 'POST', '/api/server/stop');
 
       expect(res.status).toBe(200);
-      expect(s7.stop).toHaveBeenCalledOnce();
+      expect(registry.stopAll).toHaveBeenCalledOnce();
     });
 
-    it('should stop S7 Connector before stopping the runtime', async () => {
+    it('should stop ConnectorRegistry before stopping the runtime', async () => {
       const callOrder: string[] = [];
-      (s7.stop as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        callOrder.push('s7.stop');
+      (registry.stopAll as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('registry.stopAll');
       });
       (pm.stop as ReturnType<typeof vi.fn>).mockImplementation(async () => {
         callOrder.push('pm.stop');
@@ -179,40 +178,40 @@ describe('S7 Connector Lifecycle Integration', () => {
 
       await makeRequest(app, 'POST', '/api/server/stop');
 
-      expect(callOrder).toEqual(['s7.stop', 'pm.stop']);
+      expect(callOrder).toEqual(['registry.stopAll', 'pm.stop']);
     });
 
-    it('should still stop S7 Connector even when runtime stop fails', async () => {
+    it('should still stop ConnectorRegistry even when runtime stop fails', async () => {
       (pm.stop as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('Process is not running')
       );
 
       const res = await makeRequest(app, 'POST', '/api/server/stop');
 
-      // S7 stop is called before pm.stop, so it should have been called
-      expect(s7.stop).toHaveBeenCalledOnce();
+      // Registry stop is called before pm.stop, so it should have been called
+      expect(registry.stopAll).toHaveBeenCalledOnce();
       expect(res.status).toBe(409);
     });
   });
 
-  describe('Without S7 Connector', () => {
-    it('should start without error when no S7 Connector is provided', async () => {
-      const appNoS7 = createApp(pm, cg); // No S7 connector
+  describe('Without ConnectorRegistry', () => {
+    it('should start without error when no ConnectorRegistry is provided', async () => {
+      const appNoRegistry = createApp(pm, cg); // No registry
       (pm.start as ReturnType<typeof vi.fn>).mockResolvedValue({
         pid: 1,
         startedAt: new Date(),
       });
 
-      const res = await makeRequest(appNoS7, 'POST', '/api/server/start');
+      const res = await makeRequest(appNoRegistry, 'POST', '/api/server/start');
 
       expect(res.status).toBe(200);
     });
 
-    it('should stop without error when no S7 Connector is provided', async () => {
-      const appNoS7 = createApp(pm, cg); // No S7 connector
+    it('should stop without error when no ConnectorRegistry is provided', async () => {
+      const appNoRegistry = createApp(pm, cg); // No registry
       (pm.stop as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
-      const res = await makeRequest(appNoS7, 'POST', '/api/server/stop');
+      const res = await makeRequest(appNoRegistry, 'POST', '/api/server/stop');
 
       expect(res.status).toBe(200);
     });

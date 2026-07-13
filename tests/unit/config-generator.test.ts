@@ -197,7 +197,7 @@ describe('ConfigGenerator', () => {
       expect(config.namespaces[1].nodes[0].nodeId).toBe('ns=3;s=Beta.Node2');
     });
 
-    it('should include S7 mapping info when available', () => {
+    it('should include connectorMapping and s7Mapping for S7 connections', () => {
       const conn = db.getConnection();
       conn.prepare(
         "INSERT INTO namespaces (id, name, uri) VALUES ('ns1', 'PlantFloor', 'urn:plant')"
@@ -206,21 +206,52 @@ describe('ConfigGenerator', () => {
         "INSERT INTO nodes (id, namespace_id, object_node_id, name, data_type) VALUES ('n1', 'ns1', NULL, 'Temp', 'Double')"
       ).run();
       conn.prepare(
-        "INSERT INTO s7_connections (id, name, host, rack, slot) VALUES ('c1', 'PLC1', '192.168.1.10', 0, 1)"
+        `INSERT INTO connections (id, type, name, params) VALUES ('c1', 's7', 'PLC1', '{"host":"192.168.1.10","rack":0,"slot":1}')`
       ).run();
       conn.prepare(
-        "INSERT INTO s7_mappings (id, connection_id, node_id, plc_address) VALUES ('m1', 'c1', 'n1', 'DB1,REAL0')"
+        "INSERT INTO mappings (id, connection_id, node_id, device_address) VALUES ('m1', 'c1', 'n1', 'DB1,REAL0')"
       ).run();
 
       const config = generator.generate();
 
       const node = config.namespaces[0].nodes[0];
+      expect(node.connectorMapping).toBeDefined();
+      expect(node.connectorMapping!.connectionType).toBe('s7');
+      expect(node.connectorMapping!.connectionHost).toBe('192.168.1.10');
+      expect(node.connectorMapping!.deviceAddress).toBe('DB1,REAL0');
+      // Backward compatibility: s7Mapping still populated for S7 type
       expect(node.s7Mapping).toBeDefined();
       expect(node.s7Mapping!.connectionHost).toBe('192.168.1.10');
       expect(node.s7Mapping!.plcAddress).toBe('DB1,REAL0');
     });
 
-    it('should not include s7Mapping when node has no mapping', () => {
+    it('should include connectorMapping without s7Mapping for non-S7 connections', () => {
+      const conn = db.getConnection();
+      conn.prepare(
+        "INSERT INTO namespaces (id, name, uri) VALUES ('ns1', 'PlantFloor', 'urn:plant')"
+      ).run();
+      conn.prepare(
+        "INSERT INTO nodes (id, namespace_id, object_node_id, name, data_type) VALUES ('n1', 'ns1', NULL, 'Temp', 'Double')"
+      ).run();
+      conn.prepare(
+        `INSERT INTO connections (id, type, name, params) VALUES ('c1', 'modbus-tcp', 'Modbus1', '{"host":"192.168.1.20","port":502,"unitId":1}')`
+      ).run();
+      conn.prepare(
+        "INSERT INTO mappings (id, connection_id, node_id, device_address) VALUES ('m1', 'c1', 'n1', 'HR:100:2')"
+      ).run();
+
+      const config = generator.generate();
+
+      const node = config.namespaces[0].nodes[0];
+      expect(node.connectorMapping).toBeDefined();
+      expect(node.connectorMapping!.connectionType).toBe('modbus-tcp');
+      expect(node.connectorMapping!.connectionHost).toBe('192.168.1.20');
+      expect(node.connectorMapping!.deviceAddress).toBe('HR:100:2');
+      // s7Mapping should NOT be populated for non-S7 connections
+      expect(node.s7Mapping).toBeUndefined();
+    });
+
+    it('should not include connectorMapping when node has no mapping', () => {
       const conn = db.getConnection();
       conn.prepare(
         "INSERT INTO namespaces (id, name, uri) VALUES ('ns1', 'PlantFloor', 'urn:plant')"
@@ -232,6 +263,7 @@ describe('ConfigGenerator', () => {
       const config = generator.generate();
 
       const node = config.namespaces[0].nodes[0];
+      expect(node.connectorMapping).toBeUndefined();
       expect(node.s7Mapping).toBeUndefined();
     });
 
