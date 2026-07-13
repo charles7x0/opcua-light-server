@@ -6,7 +6,7 @@
 import { Router, type Request, type Response } from 'express';
 import type { ProcessManager } from '../../process-manager/index.js';
 import type { ConfigGenerator } from '../../config-generator/index.js';
-import type { S7Connector } from '../../s7-connector/index.js';
+import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
 import type { ErrorResponse, StartServerResponse, SuccessResponse } from '../../types/api.js';
 import { logService } from '../../log/index.js';
 
@@ -14,7 +14,7 @@ import { logService } from '../../log/index.js';
 export interface ServerRouterOptions {
   processManager: ProcessManager;
   configGenerator: ConfigGenerator;
-  s7Connector?: S7Connector;
+  connectorRegistry?: ConnectorRegistry;
   configFilePath?: string;
 }
 
@@ -32,7 +32,7 @@ export function createServerRouter(options: ServerRouterOptions): Router {
   const {
     processManager,
     configGenerator,
-    s7Connector,
+    connectorRegistry,
     configFilePath = 'runtime/config.json',
   } = options;
 
@@ -50,9 +50,9 @@ export function createServerRouter(options: ServerRouterOptions): Router {
 
       const result = await processManager.start();
 
-      // Start S7 Connector to begin polling active PLC connections
-      if (s7Connector) {
-        s7Connector.start();
+      // Start all connectors to begin polling active connections
+      if (connectorRegistry) {
+        connectorRegistry.startAll();
       }
 
       const response: StartServerResponse = {
@@ -93,9 +93,9 @@ export function createServerRouter(options: ServerRouterOptions): Router {
    */
   router.post('/stop', async (req: Request, res: Response): Promise<void> => {
     try {
-      // Stop S7 Connector polling before stopping the runtime
-      if (s7Connector) {
-        s7Connector.stop();
+      // Stop all connector polling before stopping the runtime
+      if (connectorRegistry) {
+        connectorRegistry.stopAll();
       }
 
       await processManager.stop();

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 /**
  * In-memory cache for read operations when SQLite becomes inaccessible.
@@ -121,6 +121,60 @@ export class Database {
       // Migration 3: Add description column to s7_mappings
       3: (db) => {
         db.exec(`ALTER TABLE s7_mappings ADD COLUMN description TEXT;`);
+      },
+      // Migration 4: Create generalized connections/mappings tables and migrate S7 data
+      4: (db) => {
+        // Create new generalized tables
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS connections (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            params TEXT NOT NULL,
+            polling_interval_ms INTEGER NOT NULL DEFAULT 1000,
+            reconnect_interval_ms INTEGER NOT NULL DEFAULT 5000,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+        `);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS mappings (
+            id TEXT PRIMARY KEY,
+            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+            node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+            device_address TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(connection_id, device_address),
+            UNIQUE(node_id)
+          );
+        `);
+
+        // Check if s7_connections table exists and migrate data
+        const s7TableExists = db.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='s7_connections'"
+        ).get();
+
+        if (s7TableExists) {
+          // Migrate S7 connections
+          db.exec(`
+            INSERT INTO connections (id, type, name, params, polling_interval_ms, reconnect_interval_ms, enabled, created_at)
+              SELECT id, 's7', name, json_object('host', host, 'rack', rack, 'slot', slot),
+                     polling_interval_ms, reconnect_interval_ms, enabled, created_at
+              FROM s7_connections;
+          `);
+
+          // Migrate S7 mappings
+          db.exec(`
+            INSERT INTO mappings (id, connection_id, node_id, device_address, description, created_at)
+              SELECT id, connection_id, node_id, plc_address, description, created_at
+              FROM s7_mappings;
+          `);
+
+          // Drop old tables
+          db.exec('DROP TABLE IF EXISTS s7_mappings;');
+          db.exec('DROP TABLE IF EXISTS s7_connections;');
+        }
       },
     };
 

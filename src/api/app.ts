@@ -12,20 +12,21 @@ import swaggerUi from 'swagger-ui-express';
 import type { Database } from '../db/database.js';
 import type { ProcessManager } from '../process-manager/index.js';
 import type { ConfigGenerator } from '../config-generator/index.js';
-import type { S7Connector } from '../s7-connector/index.js';
+import type { ConnectorRegistry } from '../connectors/connector-registry.js';
 import type { TofuManager } from '../tofu-manager/index.js';
 import type { AuthConfig } from '../auth/config.js';
 import { createAuthMiddleware } from '../auth/middleware.js';
 import { NodeRepository } from '../db/repositories/node-repository.js';
 import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
 import { SecurityRepository } from '../db/repositories/security-repository.js';
-import { S7Repository } from '../db/repositories/s7-repository.js';
+import { ConnectorRepository } from '../db/repositories/connector-repository.js';
 import { createNodeRoutes } from './routes/nodes.js';
 import { createNamespaceRouter } from './routes/namespaces.js';
 import { createObjectNodeRouter } from './routes/object-nodes.js';
 import { createServerRouter } from './routes/server.js';
 import { createSecurityRouter } from './routes/security.js';
-import { createS7Router } from './routes/s7.js';
+import { createConnectorsRouter } from './routes/connectors.js';
+import { createS7AliasRouter } from './routes/s7-alias.js';
 import { createFileRouter } from './routes/files.js';
 import { createPkiRouter } from './routes/pki.js';
 import { logService } from '../log/index.js';
@@ -36,7 +37,8 @@ export interface AppDependencies {
   database: Database;
   processManager: ProcessManager;
   configGenerator: ConfigGenerator;
-  s7Connector?: S7Connector;
+  connectorRegistry?: ConnectorRegistry;
+  connectorRepository?: ConnectorRepository;
   authConfig: AuthConfig;
   tofuManager: TofuManager;
 }
@@ -48,7 +50,7 @@ export interface AppDependencies {
  * which is unauthenticated for health monitoring.
  */
 export function createApp(deps: AppDependencies): Express {
-  const { database, processManager, configGenerator, s7Connector, authConfig, tofuManager } = deps;
+  const { database, processManager, configGenerator, connectorRegistry, connectorRepository, authConfig, tofuManager } = deps;
 
   const app = express();
 
@@ -70,7 +72,7 @@ export function createApp(deps: AppDependencies): Express {
   const nodeRepo = new NodeRepository(database);
   const namespaceRepo = new NamespaceRepository(database);
   const securityRepo = new SecurityRepository(database);
-  const s7Repo = new S7Repository(database);
+  const connectorRepo = connectorRepository ?? new ConnectorRepository(database);
 
   // ─── Auth Middleware ────────────────────────────────────────────────────────
   // The server status endpoint must be unauthenticated (requirement 11.4).
@@ -84,7 +86,7 @@ export function createApp(deps: AppDependencies): Express {
   // mutating request to nodes, object-nodes, or namespaces, we regenerate
   // the config and signal the runtime to reload (if it's running).
   const CONFIG_FILE_PATH = 'runtime/config.json';
-  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces', '/api/s7/mappings'];
+  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces', '/api/s7/mappings', '/api/connectors/mappings'];
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'GET') return next();
@@ -120,9 +122,10 @@ export function createApp(deps: AppDependencies): Express {
   const objectNodeRouter = createObjectNodeRouter(database);
   app.use('/api', objectNodeRouter);
 
-  app.use('/api/server', createServerRouter({ processManager, configGenerator, s7Connector }));
+  app.use('/api/server', createServerRouter({ processManager, configGenerator, connectorRegistry }));
   app.use('/api/security', createSecurityRouter(securityRepo));
-  app.use('/api/s7', createS7Router(s7Repo, s7Connector, database));
+  app.use('/api/connectors', createConnectorsRouter(connectorRepo, connectorRegistry, database));
+  app.use('/api/s7', createS7AliasRouter(connectorRepo, connectorRegistry, database));
   app.use('/api/files', createFileRouter());
   app.use('/api/pki/certificates', createPkiRouter(tofuManager));
 

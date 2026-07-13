@@ -80,6 +80,30 @@ CREATE TABLE IF NOT EXISTS s7_mappings (
     UNIQUE(node_id)
 );
 
+-- Generalized protocol connections
+CREATE TABLE IF NOT EXISTS connections (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    params TEXT NOT NULL,
+    polling_interval_ms INTEGER NOT NULL DEFAULT 1000,
+    reconnect_interval_ms INTEGER NOT NULL DEFAULT 5000,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Generalized variable-to-node mappings
+CREATE TABLE IF NOT EXISTS mappings (
+    id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+    node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    device_address TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(connection_id, device_address),
+    UNIQUE(node_id)
+);
+
 -- Insert default security config row
 INSERT OR IGNORE INTO security_config (id, mode) VALUES (1, 'None');
 
@@ -87,3 +111,4 @@ INSERT OR IGNORE INTO security_config (id, mode) VALUES (1, 'None');
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (4);

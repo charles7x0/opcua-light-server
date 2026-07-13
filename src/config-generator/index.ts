@@ -9,7 +9,7 @@ import type {
   NamespaceConfig,
   ObjectNodeConfig,
   NodeConfig,
-  S7MappingConfig,
+  ConnectorMappingConfig,
 } from '../types/config.js';
 import type { OpcUaDataType } from '../types/index.js';
 import { logService } from '../log/index.js';
@@ -46,11 +46,12 @@ interface SecurityConfigRow {
   private_key_path: string | null;
 }
 
-/** Row shape from the s7_mappings table joined with s7_connections. */
-interface S7MappingRow {
+/** Row shape from the generalized mappings table joined with connections. */
+interface ConnectorMappingRow {
   node_id: string;
-  plc_address: string;
-  host: string;
+  device_address: string;
+  type: string;
+  params: string;
 }
 
 /**
@@ -258,8 +259,8 @@ export class ConfigGenerator {
       'SELECT id, namespace_id, object_node_id, name, data_type, initial_value FROM nodes WHERE namespace_id = ? ORDER BY name'
     ).all(namespaceId) as NodeRow[];
 
-    // Pre-load S7 mappings for all nodes in this namespace
-    const s7Mappings = this.loadS7Mappings(db, namespaceId);
+    // Pre-load connector mappings for all nodes in this namespace
+    const mappings = this.loadMappings(db, namespaceId);
 
     return nodeRows.map(node => {
       const parentPath = node.object_node_id
@@ -279,9 +280,17 @@ export class ConfigGenerator {
         config.initialValue = JSON.parse(node.initial_value);
       }
 
-      const s7Mapping = s7Mappings.get(node.id);
-      if (s7Mapping) {
-        config.s7Mapping = s7Mapping;
+      const mapping = mappings.get(node.id);
+      if (mapping) {
+        config.connectorMapping = mapping;
+
+        // Backward compatibility: populate s7Mapping for S7 connections
+        if (mapping.connectionType === 's7') {
+          config.s7Mapping = {
+            connectionHost: mapping.connectionHost,
+            plcAddress: mapping.deviceAddress,
+          };
+        }
       }
 
       return config;
@@ -289,26 +298,28 @@ export class ConfigGenerator {
   }
 
   /**
-   * Load S7 mappings for all nodes in a namespace, joining with s7_connections
-   * to get the connection host.
+   * Load connector mappings for all nodes in a namespace, joining with connections
+   * to get the connection type and params.
    */
-  private loadS7Mappings(
+  private loadMappings(
     db: import('better-sqlite3').Database,
     namespaceId: string
-  ): Map<string, S7MappingConfig> {
+  ): Map<string, ConnectorMappingConfig> {
     const rows = db.prepare(
-      `SELECT m.node_id, m.plc_address, c.host
-       FROM s7_mappings m
-       JOIN s7_connections c ON m.connection_id = c.id
+      `SELECT m.node_id, m.device_address, c.type, c.params
+       FROM mappings m
+       JOIN connections c ON m.connection_id = c.id
        JOIN nodes n ON m.node_id = n.id
        WHERE n.namespace_id = ?`
-    ).all(namespaceId) as S7MappingRow[];
+    ).all(namespaceId) as ConnectorMappingRow[];
 
-    const map = new Map<string, S7MappingConfig>();
+    const map = new Map<string, ConnectorMappingConfig>();
     for (const row of rows) {
+      const params = JSON.parse(row.params);
       map.set(row.node_id, {
-        connectionHost: row.host,
-        plcAddress: row.plc_address,
+        connectionType: row.type,
+        connectionHost: params.host ?? '',
+        deviceAddress: row.device_address,
       });
     }
 

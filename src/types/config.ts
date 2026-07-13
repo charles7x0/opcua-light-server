@@ -48,7 +48,15 @@ export interface NodeConfig {
   dataType: OpcUaDataType;
   parentPath: string;
   initialValue?: unknown;
+  connectorMapping?: ConnectorMappingConfig;
   s7Mapping?: S7MappingConfig;
+}
+
+/** Protocol-agnostic connector mapping attached to a node in the runtime configuration. */
+export interface ConnectorMappingConfig {
+  connectionType: string;
+  connectionHost: string;
+  deviceAddress: string;
 }
 
 /** S7 mapping attached to a node in the runtime configuration. */

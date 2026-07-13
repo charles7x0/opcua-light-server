@@ -6,9 +6,8 @@
 import { Database } from '../db/database.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { ConfigGenerator } from '../config-generator/index.js';
-import { S7Connector } from '../s7-connector/index.js';
-import { S7IpcBridge } from '../s7-connector/ipc-bridge.js';
-import { S7Repository } from '../db/repositories/s7-repository.js';
+import { ConnectorRegistry, S7Connector, ModbusConnector, EthernetIPConnector, IpcBridge } from '../connectors/index.js';
+import { ConnectorRepository } from '../db/repositories/connector-repository.js';
 import { NodeRepository } from '../db/repositories/node-repository.js';
 import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
 import { TofuManager } from '../tofu-manager/index.js';
@@ -53,40 +52,56 @@ async function main(): Promise<void> {
   // ─── Initialize TOFU Manager ────────────────────────────────────────────────
   const tofuManager = new TofuManager('data/pki', processManager);
 
-  // ─── Initialize S7 Connector ────────────────────────────────────────────────
+  // ─── Initialize Connector System ──────────────────────────────────────────
+  const connectorRepo = new ConnectorRepository(database);
+  const connectorRegistry = new ConnectorRegistry();
+
+  // Register all protocol connectors
   const s7Connector = new S7Connector();
-  const s7Repo = new S7Repository(database);
+  const modbusConnector = new ModbusConnector();
+  const ethernetIpConnector = new EthernetIPConnector();
 
-  // Load existing S7 connections and mappings from the database
-  const connections = s7Repo.findAllConnections();
+  connectorRegistry.register(s7Connector);
+  connectorRegistry.register(modbusConnector);
+  connectorRegistry.register(ethernetIpConnector);
+
+  // Load connections and mappings from DB into connectors
+  const connections = connectorRepo.findAllConnections();
   for (const conn of connections) {
-    s7Connector.addConnection(conn);
+    const connector = connectorRegistry.getConnector(conn.type);
+    if (connector) {
+      connector.addConnection(conn);
+    }
   }
 
-  const mappings = s7Repo.findAllMappings();
+  const mappings = connectorRepo.findAllMappings();
   for (const mapping of mappings) {
-    s7Connector.addMapping(mapping);
+    const conn = connectorRepo.findConnectionById(mapping.connectionId);
+    if (conn) {
+      const connector = connectorRegistry.getConnector(conn.type);
+      if (connector) {
+        connector.addMapping(mapping);
+      }
+    }
   }
 
-  console.log(`S7 Connector initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
-  logService.info('Server', `S7 Connector initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
+  console.log(`Connector system initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
+  logService.info('Server', `Connector system initialized: ${connections.length} connection(s), ${mappings.length} mapping(s)`);
 
-  // Wire S7 value updates to the runtime process via the IPC bridge.
-  // The bridge resolves database UUIDs to OPC UA node IDs and writes
-  // JSON messages to the runtime's stdin for real-time node value updates.
-  const ipcBridge = new S7IpcBridge(configGenerator, processManager, database);
-  s7Connector.onValueUpdate((updates) => ipcBridge.handleValueUpdates(updates));
+  // Wire value updates to the runtime process via the IPC bridge
+  const ipcBridge = new IpcBridge(configGenerator, processManager, database);
+  connectorRegistry.onValueUpdate((updates) => ipcBridge.handleValueUpdates(updates));
 
   // Register crash handler for logging
   processManager.onCrash((reason) => {
     console.error(`OPC UA Runtime crashed: ${reason}`);
     logService.error('Server', `OPC UA Runtime crashed: ${reason}`);
-    // Stop S7 polling when the runtime crashes since there's no process to receive updates
-    s7Connector.stop();
+    // Stop all connector polling when the runtime crashes since there's no process to receive updates
+    connectorRegistry.stopAll();
   });
 
   // ─── Create and Start App ───────────────────────────────────────────────────
-  const app = createApp({ database, processManager, configGenerator, s7Connector, authConfig, tofuManager });
+  const app = createApp({ database, processManager, configGenerator, connectorRegistry, connectorRepository: connectorRepo, authConfig, tofuManager });
 
   // ─── Start HTTP Server ────────────────────────────────────────────────────
   // The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt)
@@ -109,7 +124,7 @@ async function main(): Promise<void> {
 
     configGenerator.writeToFile(configPath);
     const result = await processManager.start();
-    s7Connector.start();
+    connectorRegistry.startAll();
     console.log(`OPC UA Runtime auto-started (PID: ${result.pid})`);
     logService.info('Server', `OPC UA Runtime auto-started (PID: ${result.pid})`);
   } catch (err) {
@@ -123,9 +138,9 @@ async function main(): Promise<void> {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);
     logService.info('Server', `Received ${signal}. Shutting down gracefully...`);
 
-    // Stop S7 Connector polling
-    s7Connector.stop();
-    console.log('S7 Connector stopped.');
+    // Stop all Connector polling
+    connectorRegistry.stopAll();
+    console.log('Connectors stopped.');
 
     // Stop the OPC UA runtime if running
     try {
