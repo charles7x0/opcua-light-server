@@ -17,7 +17,7 @@ export interface ConnectionConfig {
 export interface Mapping {
   id: string;
   connectionId: string;
-  nodeId: string;
+  nodeId: string | null;
   deviceAddress: string;
   description?: string;
   createdAt: string;
@@ -41,7 +41,7 @@ export interface ConnectionStatus {
 
 /** Current value snapshot for a mapped variable. */
 export interface CurrentValue {
-  nodeId: string;
+  nodeId: string | null;
   deviceAddress: string;
   connectionId: string;
   value: unknown;

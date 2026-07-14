@@ -30,7 +30,7 @@ interface S7ConnectionShape {
 interface S7MappingShape {
   id: string;
   connectionId: string;
-  nodeId: string;
+  nodeId: string | null;
   plcAddress: string;
   description?: string;
   createdAt: string;
@@ -522,7 +522,7 @@ export function createS7AliasRouter(
 
       for (const mapping of mappings) {
         const connName = connMap.get(mapping.connectionId) ?? '';
-        const node = nodeMap.get(mapping.nodeId);
+        const node = mapping.nodeId ? nodeMap.get(mapping.nodeId) : undefined;
         const nodeName = node?.name ?? '';
         const nsName = node ? (nsMap.get(node.namespace_id) ?? '') : '';
         const description = mapping.description ?? '';

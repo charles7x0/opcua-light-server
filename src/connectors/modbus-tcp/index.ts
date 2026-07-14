@@ -414,13 +414,17 @@ export class ModbusConnector implements Connector {
             const value = await this.readAddress(managed.client, parsed);
             const now = new Date();
 
-            updates.push({
-              nodeId: mapping.nodeId,
-              value,
-              quality: 'good',
-              timestamp: now,
-            });
+            // Only emit to runtime if mapping has a nodeId
+            if (mapping.nodeId) {
+              updates.push({
+                nodeId: mapping.nodeId,
+                value,
+                quality: 'good',
+                timestamp: now,
+              });
+            }
 
+            // Always cache for the live values API
             this.currentValues.set(mapping.id, {
               nodeId: mapping.nodeId,
               deviceAddress: mapping.deviceAddress,
@@ -580,6 +584,7 @@ export class ModbusConnector implements Connector {
 
     const updates: ValueUpdate[] = [];
     for (const mapping of managed.mappings.values()) {
+      if (!mapping.nodeId) continue;
       updates.push({
         nodeId: mapping.nodeId,
         value: undefined,
@@ -588,7 +593,9 @@ export class ModbusConnector implements Connector {
       });
     }
 
-    this.valueUpdateCallback(updates);
+    if (updates.length > 0) {
+      this.valueUpdateCallback(updates);
+    }
   }
 
   /**

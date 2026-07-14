@@ -390,13 +390,16 @@ export class S7Connector implements Connector {
           const value = values[mapping.deviceAddress];
           if (value !== undefined) {
             const now = new Date();
-            updates.push({
-              nodeId: mapping.nodeId,
-              value: value,
-              quality: 'good',
-              timestamp: now,
-            });
-            // Cache the current value for the live values API
+            // Only emit value updates for mappings with a nodeId
+            if (mapping.nodeId) {
+              updates.push({
+                nodeId: mapping.nodeId,
+                value: value,
+                quality: 'good',
+                timestamp: now,
+              });
+            }
+            // Cache the current value for the live values API (regardless of nodeId)
             this.currentValues.set(mapping.id, {
               nodeId: mapping.nodeId,
               deviceAddress: mapping.deviceAddress,
@@ -500,6 +503,7 @@ export class S7Connector implements Connector {
 
     const updates: ValueUpdate[] = [];
     for (const mapping of managed.mappings.values()) {
+      if (!mapping.nodeId) continue;
       updates.push({
         nodeId: mapping.nodeId,
         value: undefined,
@@ -508,7 +512,9 @@ export class S7Connector implements Connector {
       });
     }
 
-    this.valueUpdateCallback(updates);
+    if (updates.length > 0) {
+      this.valueUpdateCallback(updates);
+    }
   }
 
   /**

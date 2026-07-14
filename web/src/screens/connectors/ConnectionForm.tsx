@@ -51,7 +51,7 @@ const MODBUS_FIELDS: FieldDef[] = [
 const ETHERNET_IP_FIELDS: FieldDef[] = [
   { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.30', defaultValue: '', paramKey: 'host' },
   { id: 'port', label: 'Port', type: 'number', min: 1, defaultValue: '44818', paramKey: 'port' },
-  { id: 'slot', label: 'Slot', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
+  { id: 'slot', label: 'CIP Slot (usually 0)', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
 ];
 
 const PROTOCOL_FIELDS: Record<string, FieldDef[]> = {

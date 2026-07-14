@@ -16,7 +16,7 @@ export interface ConnectorConnection {
 export interface ConnectorMapping {
   id: string;
   connectionId: string;
-  nodeId: string;
+  nodeId: string | null;
   deviceAddress: string;
   description?: string;
   createdAt: string;
@@ -30,7 +30,7 @@ export interface ConnectorStatus {
 }
 
 export interface ConnectorCurrentValue {
-  nodeId: string;
+  nodeId: string | null;
   deviceAddress: string;
   connectionId: string;
   value: unknown;
@@ -84,11 +84,19 @@ export function getMappings(connectionId?: string): Promise<ConnectorMapping[]> 
 
 export function createMapping(data: {
   connectionId: string;
-  nodeId: string;
+  nodeId?: string;
   deviceAddress: string;
   description?: string;
 }): Promise<ConnectorMapping> {
   return request<ConnectorMapping>('/connectors/mappings', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateMapping(id: string, data: {
+  nodeId?: string;
+  deviceAddress?: string;
+  description?: string;
+}): Promise<ConnectorMapping> {
+  return request<ConnectorMapping>(`/connectors/mappings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
 export function deleteMapping(id: string): Promise<void> {

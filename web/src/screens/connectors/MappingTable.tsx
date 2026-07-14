@@ -8,14 +8,15 @@ interface MappingTableProps {
   mappings: ConnectorMapping[];
   currentValues: ConnectorCurrentValue[];
   allNodes: Array<{ id: string; name: string }>;
-  onAddMapping: (data: { connectionId: string; nodeId: string; deviceAddress: string }) => void;
+  onAddMapping: (data: { connectionId: string; nodeId?: string; deviceAddress: string }) => Promise<void>;
+  onUpdateMapping: (id: string, data: { nodeId?: string; deviceAddress?: string }) => Promise<void>;
   onRemoveMapping: (mappingId: string) => void;
 }
 
 const ADDRESS_PLACEHOLDERS: Record<string, string> = {
   's7': 'DB1,REAL0',
   'modbus-tcp': 'HR:100:1',
-  'ethernet-ip': 'TagName',
+  'ethernet-ip': 'Program:Main.Tag',
 };
 
 function getAddressPlaceholder(connectionType: string): string {
@@ -29,17 +30,66 @@ export function MappingTable({
   currentValues,
   allNodes,
   onAddMapping,
+  onUpdateMapping,
   onRemoveMapping,
 }: MappingTableProps): JSX.Element {
   const [newNodeId, setNewNodeId] = useState('');
   const [newDeviceAddress, setNewDeviceAddress] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNodeId, setEditNodeId] = useState('');
+  const [editDeviceAddress, setEditDeviceAddress] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  function handleAdd(): void {
-    if (!newNodeId || !newDeviceAddress.trim()) return;
-    onAddMapping({ connectionId, nodeId: newNodeId, deviceAddress: newDeviceAddress.trim() });
-    setNewNodeId('');
-    setNewDeviceAddress('');
+  async function handleAdd(): Promise<void> {
+    if (!newDeviceAddress.trim()) return;
+    setIsAdding(true);
+    setAddError('');
+    try {
+      await onAddMapping({
+        connectionId,
+        nodeId: newNodeId || undefined,
+        deviceAddress: newDeviceAddress.trim(),
+      });
+      setNewNodeId('');
+      setNewDeviceAddress('');
+    } catch (e: unknown) {
+      setAddError((e as Error).message ?? 'Failed to add mapping');
+    } finally {
+      setIsAdding(false);
+    }
+  }
+
+  function startEdit(mapping: ConnectorMapping): void {
+    setEditingId(mapping.id);
+    setEditNodeId(mapping.nodeId ?? '');
+    setEditDeviceAddress(mapping.deviceAddress);
+  }
+
+  function cancelEdit(): void {
+    setEditingId(null);
+    setEditNodeId('');
+    setEditDeviceAddress('');
+  }
+
+  async function handleUpdate(): Promise<void> {
+    if (!editingId || !editDeviceAddress.trim()) return;
+    setIsUpdating(true);
+    try {
+      await onUpdateMapping(editingId, {
+        nodeId: editNodeId || undefined,
+        deviceAddress: editDeviceAddress.trim(),
+      });
+      setEditingId(null);
+      setEditNodeId('');
+      setEditDeviceAddress('');
+    } catch (e: unknown) {
+      setAddError((e as Error).message ?? 'Failed to update mapping');
+    } finally {
+      setIsUpdating(false);
+    }
   }
 
   function handleRemoveRequest(mappingId: string): void {
@@ -59,7 +109,8 @@ export function MappingTable({
     );
   }
 
-  function getNodeName(nodeId: string): string {
+  function getNodeName(nodeId: string | null): string {
+    if (!nodeId) return '—';
     const node = allNodes.find((n) => n.id === nodeId);
     return node?.name ?? nodeId;
   }
@@ -72,57 +123,134 @@ export function MappingTable({
         </span>
       </div>
 
-      {mappings.length === 0 && (
-        <div className="px-6 py-4">
-          <p className="text-xs text-gray-400 italic">No mappings configured. Use the form below to add one.</p>
+      {addError && (
+        <div className="px-6 py-2 bg-danger-50 border-b border-danger-100">
+          <p role="alert" className="text-xs text-danger-600">{addError}</p>
         </div>
       )}
 
-      {mappings.length > 0 && (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left text-[11px] text-gray-500 uppercase tracking-wide border-b border-gray-200 bg-gray-50/50">
-              <th className="pl-6 pr-2 py-2 font-medium w-[180px]">Device Address</th>
-              <th className="px-2 py-2 font-medium">Mapped Node</th>
-              <th className="px-2 py-2 font-medium w-[130px]">Value</th>
-              <th className="px-2 py-2 font-medium w-[80px]">Quality</th>
-              <th className="px-2 pr-6 py-2 font-medium w-[40px]"></th>
+      <table className="w-full text-xs" aria-label="Variable mappings">
+        <thead>
+          <tr className="text-left text-[11px] text-gray-500 uppercase tracking-wide border-b border-gray-200 bg-gray-50/50">
+            <th scope="col" className="pl-6 pr-2 py-2 font-medium w-[180px]">Device Address</th>
+            <th scope="col" className="px-2 py-2 font-medium">Mapped Node</th>
+            <th scope="col" className="px-2 py-2 font-medium w-[130px]">Value</th>
+            <th scope="col" className="px-2 py-2 font-medium w-[80px]">Quality</th>
+            <th scope="col" className="px-2 pr-6 py-2 font-medium w-[80px]"><span className="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {mappings.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-6 py-4">
+                <p className="text-xs text-gray-400 italic">No mappings configured. Use the row below to add one.</p>
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {mappings.map((mapping) => {
-              const liveValue = getValueForMapping(mapping);
+          )}
+          {mappings.map((mapping) => {
+            const liveValue = getValueForMapping(mapping);
+            const isEditing = editingId === mapping.id;
+
+            if (isEditing) {
               return (
-                <tr key={mapping.id}>
-                  <td className="pl-6 pr-2 py-2 font-mono text-gray-900">
-                    {mapping.deviceAddress}
+                <tr key={mapping.id} className="bg-yellow-50/50">
+                  <td className="pl-6 pr-2 py-1">
+                    <Input
+                      type="text"
+                      inputSize="xs"
+                      value={editDeviceAddress}
+                      onChange={(e) => setEditDeviceAddress(e.target.value)}
+                      placeholder={getAddressPlaceholder(connectionType)}
+                      className="mt-0 font-mono bg-white"
+                      aria-label="Edit device address"
+                    />
                   </td>
-                  <td className="px-2 py-2 text-gray-700">
-                    {getNodeName(mapping.nodeId)}
+                  <td className="px-2 py-1">
+                    <Select
+                      selectSize="xs"
+                      value={editNodeId}
+                      onChange={(e) => setEditNodeId(e.target.value)}
+                      className="mt-0 bg-white"
+                      aria-label="Edit mapped node"
+                    >
+                      <option value="">Select node...</option>
+                      {allNodes.map((node) => (
+                        <option key={node.id} value={node.id}>{node.name}</option>
+                      ))}
+                    </Select>
                   </td>
-                  <td className="px-2 py-2 font-mono text-gray-900">
-                    {liveValue?.value !== undefined && liveValue?.value !== null
-                      ? String(liveValue.value)
-                      : <span className="text-gray-300">—</span>}
+                  <td className="px-2 py-1"></td>
+                  <td className="px-2 py-1"></td>
+                  <td className="px-2 pr-6 py-1 text-center">
+                    <div className="flex items-center gap-1 justify-center">
+                      <Button
+                        type="button"
+                        variant="success"
+                        size="xs"
+                        onClick={() => { void handleUpdate(); }}
+                        disabled={!editDeviceAddress.trim() || isUpdating}
+                        loading={isUpdating}
+                        aria-label="Save mapping"
+                      >
+                        ✓
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="text-gray-400 hover:text-gray-600 text-sm px-1"
+                        aria-label="Cancel edit"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </td>
-                  <td className="px-2 py-2">
-                    {liveValue ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs">
-                        <span
-                          aria-hidden="true"
-                          className={`h-2 w-2 rounded-full ${
-                            liveValue.quality === 'good' ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        />
-                        <span className={liveValue.quality === 'good' ? 'text-green-700' : 'text-red-700'}>
-                          {liveValue.quality}
-                        </span>
+                </tr>
+              );
+            }
+
+            return (
+              <tr key={mapping.id} className="group">
+                <td className="pl-6 pr-2 py-2 font-mono text-gray-900">
+                  {mapping.deviceAddress}
+                </td>
+                <td className="px-2 py-2 text-gray-700">
+                  {mapping.nodeId
+                    ? getNodeName(mapping.nodeId)
+                    : <span className="text-gray-400 italic">unmapped</span>}
+                </td>
+                <td className="px-2 py-2 font-mono text-gray-900">
+                  {liveValue?.value !== undefined && liveValue?.value !== null
+                    ? String(liveValue.value)
+                    : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-2 py-2">
+                  {liveValue ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs" role="status" aria-label={`Quality: ${liveValue.quality}`}>
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 rounded-full ${
+                          liveValue.quality === 'good' ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                      />
+                      <span className={liveValue.quality === 'good' ? 'text-green-700' : 'text-red-700'}>
+                        {liveValue.quality}
                       </span>
-                    ) : (
-                      <span className="text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td className="px-2 pr-6 py-2 text-center">
+                    </span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 pr-6 py-2 text-center">
+                  <div className="flex items-center gap-1 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(mapping)}
+                      className="text-gray-400 hover:text-primary-600 focus:text-primary-600 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                      title="Edit mapping"
+                      aria-label={`Edit mapping ${mapping.deviceAddress}`}
+                    >
+                      ✎
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleRemoveRequest(mapping.id)}
@@ -132,46 +260,55 @@ export function MappingTable({
                     >
                       ×
                     </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-
-      {/* Add mapping form row */}
-      <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/30 flex items-center gap-2">
-        <Input
-          type="text"
-          inputSize="xs"
-          value={newDeviceAddress}
-          onChange={(e) => setNewDeviceAddress(e.target.value)}
-          placeholder={getAddressPlaceholder(connectionType)}
-          className="mt-0 font-mono bg-white w-[180px]"
-          aria-label="Device address"
-        />
-        <Select
-          selectSize="xs"
-          value={newNodeId}
-          onChange={(e) => setNewNodeId(e.target.value)}
-          className="mt-0 bg-white flex-1"
-          aria-label="Select OPC UA node"
-        >
-          <option value="">Select node...</option>
-          {allNodes.map((node) => (
-            <option key={node.id} value={node.id}>{node.name}</option>
-          ))}
-        </Select>
-        <Button
-          size="xs"
-          onClick={handleAdd}
-          disabled={!newNodeId || !newDeviceAddress.trim()}
-          aria-label="Add mapping"
-        >
-          + Add
-        </Button>
-      </div>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+          {/* Add mapping form row */}
+          <tr className="border-t border-gray-100 bg-gray-50/30">
+            <td className="pl-6 pr-2 py-2">
+              <Input
+                type="text"
+                inputSize="xs"
+                value={newDeviceAddress}
+                onChange={(e) => setNewDeviceAddress(e.target.value)}
+                placeholder={getAddressPlaceholder(connectionType)}
+                className="mt-0 font-mono bg-white"
+                aria-label="New mapping device address"
+              />
+            </td>
+            <td className="px-2 py-2">
+              <Select
+                selectSize="xs"
+                value={newNodeId}
+                onChange={(e) => setNewNodeId(e.target.value)}
+                className="mt-0 bg-white"
+                aria-label="Select OPC UA node for new mapping"
+              >
+                <option value="">Select node...</option>
+                {allNodes.map((node) => (
+                  <option key={node.id} value={node.id}>{node.name}</option>
+                ))}
+              </Select>
+            </td>
+            <td className="px-2 py-2"></td>
+            <td className="px-2 py-2"></td>
+            <td className="px-2 pr-6 py-2 text-center">
+              <Button
+                type="button"
+                size="xs"
+                onClick={() => { void handleAdd(); }}
+                disabled={!newDeviceAddress.trim() || isAdding}
+                loading={isAdding}
+                aria-label="Add mapping"
+              >
+                +
+              </Button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {deleteConfirmId && (
         <ConfirmDialog

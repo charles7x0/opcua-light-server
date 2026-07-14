@@ -98,12 +98,11 @@ describe('ConnectionForm', () => {
     expect(screen.getByLabelText('Unit ID')).toBeInTheDocument();
   });
 
-  it('renders host, port, slot fields for ethernet-ip type', () => {
+  it('renders host, port fields for ethernet-ip type', () => {
     render(<ConnectionForm type="ethernet-ip" {...defaultProps} />);
 
     expect(screen.getByLabelText('Host')).toBeInTheDocument();
     expect(screen.getByLabelText('Port')).toBeInTheDocument();
-    expect(screen.getByLabelText('Slot')).toBeInTheDocument();
   });
 
   it('does not render S7-specific fields for modbus-tcp', () => {

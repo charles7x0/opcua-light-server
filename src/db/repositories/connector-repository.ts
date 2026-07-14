@@ -35,7 +35,7 @@ export interface UpdateConnectionRequest {
 /** Request body for creating a mapping. */
 export interface CreateMappingRequest {
   connectionId: string;
-  nodeId: string;
+  nodeId?: string;
   deviceAddress: string;
   description?: string;
 }
@@ -63,7 +63,7 @@ interface ConnectionRow {
 interface MappingRow {
   id: string;
   connection_id: string;
-  node_id: string;
+  node_id: string | null;
   device_address: string;
   description: string | null;
   created_at: string;
@@ -254,30 +254,32 @@ export class ConnectorRepository {
       };
     }
 
-    // Validate that the node exists
-    const nodeExists = this.nodeExists(request.nodeId);
-    if (!nodeExists) {
-      return {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: `Node with id "${request.nodeId}" not found`,
-          details: [{ field: 'nodeId', message: `Node "${request.nodeId}" does not exist` }],
-        },
-      };
-    }
+    // Validate that the node exists (only if nodeId is provided)
+    if (request.nodeId) {
+      const nodeExists = this.nodeExists(request.nodeId);
+      if (!nodeExists) {
+        return {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: `Node with id "${request.nodeId}" not found`,
+            details: [{ field: 'nodeId', message: `Node "${request.nodeId}" does not exist` }],
+          },
+        };
+      }
 
-    // Check unique constraint: one mapping per node
-    const existingNodeMapping = this.findMappingByNodeId(request.nodeId);
-    if (existingNodeMapping) {
-      return {
-        success: false,
-        error: {
-          code: 'DUPLICATE_ERROR',
-          message: `Node "${request.nodeId}" already has a mapping`,
-          details: [{ field: 'nodeId', message: `Node "${request.nodeId}" is already mapped to a device address` }],
-        },
-      };
+      // Check unique constraint: one mapping per node
+      const existingNodeMapping = this.findMappingByNodeId(request.nodeId);
+      if (existingNodeMapping) {
+        return {
+          success: false,
+          error: {
+            code: 'DUPLICATE_ERROR',
+            message: `Node "${request.nodeId}" already has a mapping`,
+            details: [{ field: 'nodeId', message: `Node "${request.nodeId}" is already mapped to a device address` }],
+          },
+        };
+      }
     }
 
     // Check unique constraint: unique device address per connection
@@ -302,7 +304,7 @@ export class ConnectorRepository {
       db.prepare(
         `INSERT INTO mappings (id, connection_id, node_id, device_address, description, created_at)
          VALUES (?, ?, ?, ?, ?, datetime('now'))`
-      ).run(id, request.connectionId, request.nodeId, request.deviceAddress, request.description ?? null);
+      ).run(id, request.connectionId, request.nodeId ?? null, request.deviceAddress, request.description ?? null);
 
       return db.prepare('SELECT * FROM mappings WHERE id = ?').get(id) as MappingRow;
     });

@@ -12,7 +12,8 @@ interface ConnectionCardProps {
   mappings?: ConnectorMapping[];
   currentValues?: ConnectorCurrentValue[];
   allNodes?: Array<{ id: string; name: string }>;
-  onAddMapping?: (data: { connectionId: string; nodeId: string; deviceAddress: string }) => void;
+  onAddMapping?: (data: { connectionId: string; nodeId?: string; deviceAddress: string }) => Promise<void>;
+  onUpdateMapping?: (id: string, data: { nodeId?: string; deviceAddress?: string }) => Promise<void>;
   onRemoveMapping?: (mappingId: string) => void;
 }
 
@@ -35,7 +36,7 @@ function getStatusVariant(state?: ConnectorStatus['state']): BadgeVariant {
   }
 }
 
-export function ConnectionCard({ connection, status, onEdit, onDelete, mappings = [], currentValues = [], allNodes = [], onAddMapping, onRemoveMapping }: ConnectionCardProps): JSX.Element {
+export function ConnectionCard({ connection, status, onEdit, onDelete, mappings = [], currentValues = [], allNodes = [], onAddMapping, onUpdateMapping, onRemoveMapping }: ConnectionCardProps): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -91,7 +92,7 @@ export function ConnectionCard({ connection, status, onEdit, onDelete, mappings 
         </div>
       </div>
 
-      {expanded && onAddMapping && onRemoveMapping && (
+      {expanded && onAddMapping && onUpdateMapping && onRemoveMapping && (
         <MappingTable
           connectionId={connection.id}
           connectionType={connection.type}
@@ -99,6 +100,7 @@ export function ConnectionCard({ connection, status, onEdit, onDelete, mappings 
           currentValues={currentValues}
           allNodes={allNodes}
           onAddMapping={onAddMapping}
+          onUpdateMapping={onUpdateMapping}
           onRemoveMapping={onRemoveMapping}
         />
       )}

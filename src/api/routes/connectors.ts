@@ -173,7 +173,11 @@ export function createConnectorsRouter(
 
   // ─── Mapping Endpoints ──────────────────────────────────────────────────────
 
-  /** POST /api/connectors/mappings - Create a new mapping */
+  /**
+   * POST /api/connectors/mappings - Create a new mapping.
+   * Required fields: connectionId, deviceAddress.
+   * Optional fields: nodeId (links mapping to an OPC UA node), description.
+   */
   router.post('/mappings', (req: Request, res: Response) => {
     const body = req.body as Partial<CreateMappingRequest>;
 
@@ -182,8 +186,8 @@ export function createConnectorsRouter(
     if (!body.connectionId || typeof body.connectionId !== 'string' || body.connectionId.trim() === '') {
       errors.push({ field: 'connectionId', message: 'Connection ID is required' });
     }
-    if (!body.nodeId || typeof body.nodeId !== 'string' || body.nodeId.trim() === '') {
-      errors.push({ field: 'nodeId', message: 'Node ID is required' });
+    if (body.nodeId !== undefined && body.nodeId !== null && (typeof body.nodeId !== 'string' || body.nodeId.trim() === '')) {
+      errors.push({ field: 'nodeId', message: 'Node ID must be a non-empty string when provided' });
     }
     if (!body.deviceAddress || typeof body.deviceAddress !== 'string' || body.deviceAddress.trim() === '') {
       errors.push({ field: 'deviceAddress', message: 'Device address is required' });
@@ -331,8 +335,8 @@ export function createConnectorsRouter(
 
     for (let i = 0; i < body.length; i++) {
       const item = body[i];
-      if (!item.connectionId || !item.nodeId || !item.deviceAddress) {
-        results.push({ index: i, success: false, error: 'Missing required fields (connectionId, nodeId, deviceAddress)' });
+      if (!item.connectionId || !item.deviceAddress) {
+        results.push({ index: i, success: false, error: 'Missing required fields (connectionId, deviceAddress)' });
         continue;
       }
 
@@ -396,7 +400,7 @@ export function createConnectorsRouter(
         const conn = connMap.get(mapping.connectionId);
         const connName = conn?.name ?? '';
         const connType = conn?.type ?? '';
-        const node = nodeMap.get(mapping.nodeId);
+        const node = mapping.nodeId ? nodeMap.get(mapping.nodeId) : undefined;
         const nodeName = node?.name ?? '';
         const nsName = node ? (nsMap.get(node.namespace_id) ?? '') : '';
         const description = mapping.description ?? '';

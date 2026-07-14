@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 /**
  * In-memory cache for read operations when SQLite becomes inaccessible.
@@ -175,6 +175,27 @@ export class Database {
           db.exec('DROP TABLE IF EXISTS s7_mappings;');
           db.exec('DROP TABLE IF EXISTS s7_connections;');
         }
+      },
+      // Migration 5: Make node_id nullable in mappings table (allow saving address without mapped node)
+      5: (db) => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS mappings_new (
+            id TEXT PRIMARY KEY,
+            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+            node_id TEXT REFERENCES nodes(id) ON DELETE CASCADE,
+            device_address TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(connection_id, device_address)
+          );
+        `);
+        db.exec(`
+          INSERT INTO mappings_new (id, connection_id, node_id, device_address, description, created_at)
+            SELECT id, connection_id, node_id, device_address, description, created_at
+            FROM mappings;
+        `);
+        db.exec('DROP TABLE mappings;');
+        db.exec('ALTER TABLE mappings_new RENAME TO mappings;');
       },
     };
 

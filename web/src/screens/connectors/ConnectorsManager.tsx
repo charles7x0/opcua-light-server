@@ -8,6 +8,7 @@ import {
   deleteConnection,
   getMappings,
   createMapping,
+  updateMapping,
   deleteMapping,
   getConnectorValues,
   getNodes,
@@ -19,6 +20,7 @@ import {
 } from '../../api';
 import { Button, Badge } from '../../components';
 import { type BadgeVariant } from '../../components/styles';
+import { useNodePaths } from '../../hooks/useNodePaths';
 import { ConnectionCard } from './ConnectionCard';
 import { CsvImportExport } from './CsvImportExport';
 import { ProtocolSelector } from './ProtocolSelector';
@@ -73,6 +75,8 @@ export function ConnectorsManager(): JSX.Element {
     queryFn: getNodes,
   });
 
+  const { getNodePath } = useNodePaths();
+
   const createConnectionMutation = useMutation({
     mutationFn: createConnection,
     onSuccess: () => {
@@ -99,6 +103,13 @@ export function ConnectorsManager(): JSX.Element {
 
   const createMappingMutation = useMutation({
     mutationFn: createMapping,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connectors-mappings'] });
+    },
+  });
+
+  const updateMappingMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { nodeId?: string; deviceAddress?: string } }) => updateMapping(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connectors-mappings'] });
     },
@@ -224,8 +235,9 @@ export function ConnectorsManager(): JSX.Element {
                 onDelete={() => deleteConnectionMutation.mutate(conn.id)}
                 mappings={mappings.filter((m) => m.connectionId === conn.id)}
                 currentValues={currentValues.filter((v) => v.connectionId === conn.id)}
-                allNodes={allNodes.map((n) => ({ id: n.id, name: n.name }))}
-                onAddMapping={(data) => createMappingMutation.mutate(data)}
+                allNodes={allNodes.map((n) => ({ id: n.id, name: getNodePath(n) }))}
+                onAddMapping={(data) => createMappingMutation.mutateAsync(data).then(() => {})}
+                onUpdateMapping={(id, data) => updateMappingMutation.mutateAsync({ id, data }).then(() => {})}
                 onRemoveMapping={(mappingId) => deleteMappingMutation.mutate(mappingId)}
               />
             );
