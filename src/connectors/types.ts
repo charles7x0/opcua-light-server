@@ -1,5 +1,5 @@
 /** Protocol type discriminator string. */
-export type ConnectorType = 's7' | 'modbus-tcp' | 'ethernet-ip' | string;
+export type ConnectorType = 's7' | 'modbus-tcp' | 'ethernet-ip' | 'pccc' | string;
 
 /** Protocol-agnostic connection configuration. */
 export interface ConnectionConfig {

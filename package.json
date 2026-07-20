@@ -30,6 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "modbus-serial": "^8.0.25",
     "node-forge": "^1.4.0",
+    "nodepccc": "^0.1.17",
     "nodes7": "^0.3.16",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^10.0.0"

@@ -6,7 +6,7 @@
 import { Database } from '../db/database.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { ConfigGenerator } from '../config-generator/index.js';
-import { ConnectorRegistry, S7Connector, ModbusConnector, EthernetIPConnector, IpcBridge } from '../connectors/index.js';
+import { ConnectorRegistry, S7Connector, ModbusConnector, EthernetIPConnector, PcccConnector, IpcBridge } from '../connectors/index.js';
 import { ConnectorRepository } from '../db/repositories/connector-repository.js';
 import { NodeRepository } from '../db/repositories/node-repository.js';
 import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
@@ -60,10 +60,12 @@ async function main(): Promise<void> {
   const s7Connector = new S7Connector();
   const modbusConnector = new ModbusConnector();
   const ethernetIpConnector = new EthernetIPConnector();
+  const pcccConnector = new PcccConnector();
 
   connectorRegistry.register(s7Connector);
   connectorRegistry.register(modbusConnector);
   connectorRegistry.register(ethernetIpConnector);
+  connectorRegistry.register(pcccConnector);
 
   // Load connections and mappings from DB into connectors
   const connections = connectorRepo.findAllConnections();
