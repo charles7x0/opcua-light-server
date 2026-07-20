@@ -1,5 +1,6 @@
 import { PLC } from 'ethernet-ip';
 import type { PLCConnectOptions, TagValue } from 'ethernet-ip';
+import { TimeoutError, CIPError, ConnectionError, SessionError } from 'ethernet-ip';
 import type {
   Connector,
   ConnectorType,
@@ -26,6 +27,7 @@ interface ManagedConnection {
   errorMessage?: string;
   pollingTimer: ReturnType<typeof setInterval> | null;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
+  pollInProgress: boolean;
   mappings: Map<string, Mapping>;
   connecting: boolean;
 }
@@ -81,6 +83,7 @@ export class EthernetIPConnector implements Connector {
       state: 'disconnected',
       pollingTimer: null,
       reconnectTimer: null,
+      pollInProgress: false,
       mappings: new Map(),
       connecting: false,
     };
@@ -229,6 +232,10 @@ export class EthernetIPConnector implements Connector {
 
   /**
    * Initiate a connection to an EtherNet/IP device.
+   * After connecting, performs tag discovery so the library learns data types
+   * for subsequent read/write operations. Discovery failures are logged as
+   * warnings but do not prevent polling — reads may still succeed for
+   * explicitly typed tags.
    */
   private initiateConnection(managed: ManagedConnection): void {
     if (managed.connecting) return;
@@ -241,11 +248,14 @@ export class EthernetIPConnector implements Connector {
 
     const connectOptions: PLCConnectOptions = {
       slot: managed.slot,
+      connected: true,
+      discover: true,
+      timeout: 10000,
       autoReconnect: false,
     };
 
     plc.connect(managed.host, connectOptions)
-      .then(() => {
+      .then(async () => {
         managed.connecting = false;
 
         // Guard: plc may have been nullified by disconnectAndCleanup
@@ -304,6 +314,7 @@ export class EthernetIPConnector implements Connector {
     const poll = (): void => {
       if (managed.state !== 'connected' || !managed.plc) return;
       if (managed.mappings.size === 0) return;
+      if (managed.pollInProgress) return; // Skip if previous poll still running
 
       this.pollTags(managed);
     };
@@ -317,10 +328,18 @@ export class EthernetIPConnector implements Connector {
 
   /**
    * Poll all mapped CIP tags for a connection.
-   * Reads each tag individually using the PLC.read() method.
+   * Reads tags using PLC.read() (single or batch depending on count).
+   *
+   * Error handling strategy:
+   * - ConnectionError / SessionError → triggers full reconnection cycle
+   * - TimeoutError / CIPError / unknown non-socket errors → marks quality "bad"
+   *   but keeps the connection alive (no reconnect), so the next poll can recover
+   * - Socket-level errors (ECONNRESET, EPIPE, etc.) → triggers reconnection
    */
   private pollTags(managed: ManagedConnection): void {
     if (!managed.plc) return;
+
+    managed.pollInProgress = true;
 
     const mappings = Array.from(managed.mappings.values());
     const tagNames = mappings.map((m) => m.deviceAddress);
@@ -372,9 +391,32 @@ export class EthernetIPConnector implements Connector {
             this.valueUpdateCallback(updates);
           }
         }
+
+        managed.pollInProgress = false;
       })
       .catch((err: unknown) => {
-        this.handleConnectionError(managed, err);
+        managed.pollInProgress = false;
+        if (err instanceof ConnectionError || err instanceof SessionError) {
+          // Actual connection loss — reconnect
+          this.handleConnectionError(managed, err);
+        } else if (err instanceof TimeoutError) {
+          // Read timeout — log and mark quality bad, but don't reconnect
+          this.log('warn', managed.config.name, `Read timeout: ${(err as Error).message}`);
+          this.emitQualityUpdate(managed, 'bad');
+        } else if (err instanceof CIPError) {
+          // CIP protocol error (tag not found, path error, etc.) — log and mark bad
+          this.log('warn', managed.config.name, `CIP error reading tags: ${(err as Error).message}`);
+          this.emitQualityUpdate(managed, 'bad');
+        } else {
+          // Unknown error — check if socket is dead
+          const msg = (err as Error)?.message ?? 'Unknown error';
+          if (msg.includes('ECONNRESET') || msg.includes('EPIPE') || msg.includes('socket') || msg.includes('Not connected') || msg.includes('Connection lost')) {
+            this.handleConnectionError(managed, err);
+          } else {
+            this.log('warn', managed.config.name, `Poll error: ${msg}`);
+            this.emitQualityUpdate(managed, 'bad');
+          }
+        }
       });
   }
 
