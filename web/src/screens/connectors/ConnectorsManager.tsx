@@ -31,12 +31,14 @@ const PROTOCOL_TABS = [
   { label: 'S7', value: 's7' },
   { label: 'Modbus TCP', value: 'modbus-tcp' },
   { label: 'EtherNet/IP', value: 'ethernet-ip' },
+  { label: 'PCCC', value: 'pccc' },
 ] as const;
 
 const PROTOCOL_BADGES: Record<string, { label: string; variant: BadgeVariant }> = {
   's7': { label: 'S7', variant: 'blue' },
   'modbus-tcp': { label: 'Modbus TCP', variant: 'green' },
   'ethernet-ip': { label: 'EtherNet/IP', variant: 'yellow' },
+  'pccc': { label: 'PCCC', variant: 'gray' },
 };
 
 type ProtocolFilter = (typeof PROTOCOL_TABS)[number]['value'];

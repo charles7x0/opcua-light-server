@@ -17,6 +17,7 @@ const ADDRESS_PLACEHOLDERS: Record<string, string> = {
   's7': 'DB1,REAL0',
   'modbus-tcp': 'HR:100:1',
   'ethernet-ip': 'Program:Main.Tag',
+  'pccc': 'N7:0',
 };
 
 function getAddressPlaceholder(connectionType: string): string {

@@ -16,6 +16,7 @@ const PROTOCOLS: ProtocolOption[] = [
   { type: 's7', label: 'Siemens S7', description: 'Connect to S7-300/400/1200/1500 PLCs', icon: '🔌' },
   { type: 'modbus-tcp', label: 'Modbus TCP', description: 'Connect to Modbus TCP devices', icon: '📡' },
   { type: 'ethernet-ip', label: 'EtherNet/IP', description: 'Connect to Rockwell/Allen-Bradley PLCs', icon: '🏭' },
+  { type: 'pccc', label: 'PCCC', description: 'Connect to Allen-Bradley legacy PLCs (SLC, MicroLogix, PLC-5)', icon: '🔧' },
 ];
 
 export function ProtocolSelector({ onSelect, onCancel }: ProtocolSelectorProps) {

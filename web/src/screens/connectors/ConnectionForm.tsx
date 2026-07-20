@@ -54,16 +54,24 @@ const ETHERNET_IP_FIELDS: FieldDef[] = [
   { id: 'slot', label: 'CIP Slot (usually 0)', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
 ];
 
+const PCCC_FIELDS: FieldDef[] = [
+  { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.40', defaultValue: '', paramKey: 'host' },
+  { id: 'port', label: 'Port', type: 'number', min: 1, defaultValue: '44818', paramKey: 'port' },
+  { id: 'slot', label: 'Slot', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
+];
+
 const PROTOCOL_FIELDS: Record<string, FieldDef[]> = {
   's7': S7_FIELDS,
   'modbus-tcp': MODBUS_FIELDS,
   'ethernet-ip': ETHERNET_IP_FIELDS,
+  'pccc': PCCC_FIELDS,
 };
 
 const PROTOCOL_LABELS: Record<string, string> = {
   's7': 'S7',
   'modbus-tcp': 'Modbus TCP',
   'ethernet-ip': 'EtherNet/IP',
+  'pccc': 'PCCC',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

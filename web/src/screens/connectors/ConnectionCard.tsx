@@ -21,6 +21,7 @@ const PROTOCOL_BADGES: Record<string, { label: string; variant: BadgeVariant }> 
   's7': { label: 'S7', variant: 'blue' },
   'modbus-tcp': { label: 'Modbus TCP', variant: 'green' },
   'ethernet-ip': { label: 'EtherNet/IP', variant: 'yellow' },
+  'pccc': { label: 'PCCC', variant: 'gray' },
 };
 
 function getProtocolBadge(type: string): { label: string; variant: BadgeVariant } {
