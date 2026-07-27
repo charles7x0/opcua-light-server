@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { getSystemLogs, type LogEntry } from '../api';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLogStream, type LogEntry } from '../hooks/useLogStream';
 import { Button } from '../components';
 import {
   type LogLevel,
@@ -24,29 +24,18 @@ export function LogPanel({ open, onClose }: LogPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(['info', 'warn', 'error']));
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const lastTimestampRef = useRef<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-
-    async function fetchLogs() {
-      try {
-        const newLogs = await getSystemLogs({ since: lastTimestampRef.current });
-        if (!active) return;
-        if (newLogs.length > 0) {
-          setLogs((prev) => [...prev, ...newLogs].slice(-1000));
-          lastTimestampRef.current = newLogs[newLogs.length - 1].timestamp;
-        }
-      } catch {
-        // ignore
+  const handleLogEntry = useCallback((entry: LogEntry) => {
+    setLogs((prev) => {
+      const next = [...prev, entry];
+      if (next.length > 1000) {
+        return next.slice(-1000);
       }
-    }
+      return next;
+    });
+  }, []);
 
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 2000);
-    return () => { active = false; clearInterval(interval); };
-  }, [open]);
+  useLogStream(handleLogEntry);
 
   useEffect(() => {
     if (autoScroll && logContainerRef.current) {
@@ -54,13 +43,13 @@ export function LogPanel({ open, onClose }: LogPanelProps) {
     }
   }, [logs, autoScroll]);
 
-  function handleScroll() {
+  function handleScroll(): void {
     if (!logContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 50);
   }
 
-  function toggleLevel(level: LogLevel) {
+  function toggleLevel(level: LogLevel): void {
     setActiveLevels((prev) => {
       const next = new Set(prev);
       if (next.has(level)) next.delete(level);
@@ -102,7 +91,7 @@ export function LogPanel({ open, onClose }: LogPanelProps) {
               ↓ Auto-scroll
             </Button>
           )}
-          <Button variant="ghost-dark" size="xs" onClick={() => { setLogs([]); lastTimestampRef.current = undefined; }}>
+          <Button variant="ghost-dark" size="xs" onClick={() => { setLogs([]); }}>
             Clear
           </Button>
           <Button variant="ghost-dark" size="xs" onClick={onClose}>

@@ -31,13 +31,11 @@ export function Dashboard() {
   const { data: status, isLoading, isError } = useQuery({
     queryKey: ['serverStatus'],
     queryFn: getServerStatus,
-    refetchInterval: 5000,
   });
 
   const { data: clients = [] } = useQuery({
     queryKey: ['server', 'clients'],
     queryFn: getConnectedClients,
-    refetchInterval: 3000,
     enabled: status?.state === 'running',
   });
 

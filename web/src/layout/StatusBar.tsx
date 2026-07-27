@@ -5,6 +5,7 @@ import { formatUptime } from '../utils/formatUptime';
 import { StatusDot, StatusBarItem, StatusBarAlert, Button } from '../components';
 import { type StatusDotColor } from '../components/styles';
 import { LogPanel } from './LogPanel';
+import { type SseConnectionState } from '../hooks/useSSE';
 
 export type CertificateHealthColor = 'green' | 'yellow' | 'red';
 
@@ -20,25 +21,42 @@ const CERT_COLOR_CLASSES: Record<CertificateHealthColor, string> = {
   red: 'text-red-500',
 };
 
-function getRuntimeDotColor(state: string): StatusDotColor {
+function getRuntimeDotColor(state: string, backendDown: boolean): StatusDotColor {
+  if (backendDown) return 'gray';
   if (state === 'running') return 'green';
   if (state === 'error') return 'red';
   return 'yellow';
 }
 
-function getRuntimeLabel(state: string): string {
+function getRuntimeLabel(state: string, backendDown: boolean): string {
+  if (backendDown) return 'Unknown';
   if (state === 'running') return 'Running';
   if (state === 'error') return 'Error';
   return 'Stopped';
 }
 
-export function StatusBar() {
+function getBackendDotColor(connectionState: SseConnectionState | undefined): StatusDotColor {
+  if (connectionState === 'connected') return 'green';
+  if (connectionState === 'connecting') return 'yellow';
+  return 'red';
+}
+
+function getBackendLabel(connectionState: SseConnectionState | undefined): string {
+  if (connectionState === 'connected') return 'Connected';
+  if (connectionState === 'connecting') return 'Connecting...';
+  return 'Disconnected';
+}
+
+export interface StatusBarProps {
+  connectionState?: SseConnectionState;
+}
+
+export function StatusBar({ connectionState }: StatusBarProps) {
   const [logOpen, setLogOpen] = useState(false);
 
-  const { data: status, isError } = useQuery<ServerStatus>({
+  const { data: status } = useQuery<ServerStatus>({
     queryKey: ['server-status'],
     queryFn: getServerStatus,
-    refetchInterval: 3000,
     retry: 1,
   });
 
@@ -49,7 +67,7 @@ export function StatusBar() {
     retry: 1,
   });
 
-  const backendConnected = !isError && !!status;
+  const backendDown = connectionState === 'disconnected';
   const runtimeState = status?.state ?? 'unknown';
 
   return (
@@ -57,25 +75,25 @@ export function StatusBar() {
       <LogPanel open={logOpen} onClose={() => setLogOpen(false)} />
 
       <footer role="contentinfo" aria-label="Server status" className="fixed bottom-0 left-0 right-0 h-7 bg-gray-800 text-gray-300 text-xs flex items-center px-3 gap-4 z-50 select-none border-t border-gray-700">
-        {/* Backend connection */}
-        <StatusDot color={backendConnected ? 'green' : 'red'}>
-          API: {backendConnected ? 'Connected' : 'Disconnected'}
+        {/* Backend connection (unified API + SSE) */}
+        <StatusDot color={getBackendDotColor(connectionState)}>
+          Backend: {getBackendLabel(connectionState)}
         </StatusDot>
 
-        {/* Runtime status */}
-        <StatusDot color={getRuntimeDotColor(runtimeState)}>
-          Runtime: {getRuntimeLabel(runtimeState)}
+        {/* Runtime status — shows "Unknown" when backend is down */}
+        <StatusDot color={getRuntimeDotColor(runtimeState, backendDown)}>
+          Runtime: {getRuntimeLabel(runtimeState, backendDown)}
         </StatusDot>
 
-        {/* Uptime */}
-        {status?.state === 'running' && status.uptime !== undefined && (
+        {/* Uptime — only show when connected and running */}
+        {!backendDown && status?.state === 'running' && status.uptime !== undefined && (
           <StatusBarItem icon="⏱" label={`Uptime: ${formatUptime(status.uptime)}`}>
             {formatUptime(status.uptime)}
           </StatusBarItem>
         )}
 
-        {/* Connected clients */}
-        {status?.state === 'running' && (
+        {/* Connected clients — only show when connected and running */}
+        {!backendDown && status?.state === 'running' && (
           <StatusBarItem
             icon="👥"
             label={`${status.connectedClients ?? 0} connected client${(status.connectedClients ?? 0) !== 1 ? 's' : ''}`}
@@ -108,7 +126,7 @@ export function StatusBar() {
         </Button>
 
         {/* Last error */}
-        {status?.lastError && (
+        {status?.lastError && !backendDown && (
           <StatusBarAlert title={status.lastError}>
             {status.lastError}
           </StatusBarAlert>

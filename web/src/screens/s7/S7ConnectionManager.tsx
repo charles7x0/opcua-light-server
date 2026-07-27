@@ -34,9 +34,9 @@ export function S7ConnectionManager() {
   const [importError, setImportError] = useState('');
 
   const { data: connections = [], isLoading } = useQuery<S7Connection[]>({ queryKey: ['s7-connections'], queryFn: getS7Connections });
-  const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({ queryKey: ['s7-status'], queryFn: getS7Status, refetchInterval: 5000 });
+  const { data: statuses = [] } = useQuery<S7ConnectionStatus[]>({ queryKey: ['s7-status'], queryFn: getS7Status });
   const { data: mappings = [] } = useQuery<S7MappingItem[]>({ queryKey: ['s7-mappings'], queryFn: getS7Mappings });
-  const { data: currentValues = [] } = useQuery<S7CurrentValue[]>({ queryKey: ['s7-values'], queryFn: getS7Values, refetchInterval: 2000 });
+  const { data: currentValues = [] } = useQuery<S7CurrentValue[]>({ queryKey: ['s7-values'], queryFn: getS7Values });
   const { data: allNodes = [] } = useQuery<OpcUaNode[]>({ queryKey: ['nodes'], queryFn: getNodes });
   const { getNodePath } = useNodePaths();
 

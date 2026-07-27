@@ -5,6 +5,7 @@ import { SecuritySettings } from '../screens/security/SecuritySettings';
 import { ConnectorsManager } from '../screens/connectors/ConnectorsManager';
 import { NavBar, NavButton } from './NavBar';
 import { StatusBar } from './StatusBar';
+import { useSSE } from '../hooks/useSSE';
 
 type Section = 'dashboard' | 'address-space' | 'security' | 'connectors';
 
@@ -16,7 +17,10 @@ const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
 ];
 
 function App() {
+  const { connectionState } = useSSE();
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
+
+  const backendDown = connectionState === 'disconnected';
 
   // Listen for custom navigation events (e.g., from S7 link in NodeForm)
   useEffect(() => {
@@ -42,6 +46,16 @@ function App() {
         ))}
       </NavBar>
 
+      {/* Stale data warning banner when backend is unreachable */}
+      {backendDown && (
+        <div
+          role="alert"
+          className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800"
+        >
+          <span className="font-medium">Connection lost</span> — The data displayed may be outdated. Reconnecting to server...
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 py-8">
         {activeSection === 'dashboard' && <Dashboard />}
         {activeSection === 'address-space' && <AddressSpaceSection />}
@@ -49,7 +63,7 @@ function App() {
         {activeSection === 'connectors' && <ConnectorsManager />}
       </main>
 
-      <StatusBar />
+      <StatusBar connectionState={connectionState} />
     </div>
   );
 }

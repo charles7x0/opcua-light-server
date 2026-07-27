@@ -58,7 +58,6 @@ export function ConnectorsManager(): JSX.Element {
   const { data: statuses = [] } = useQuery<ConnectorStatus[]>({
     queryKey: ['connectors-status'],
     queryFn: getConnectorStatus,
-    refetchInterval: 5000,
   });
 
   const { data: mappings = [] } = useQuery<ConnectorMapping[]>({
@@ -69,7 +68,6 @@ export function ConnectorsManager(): JSX.Element {
   const { data: currentValues = [] } = useQuery<ConnectorCurrentValue[]>({
     queryKey: ['connectors-values'],
     queryFn: getConnectorValues,
-    refetchInterval: 2000,
   });
 
   const { data: allNodes = [] } = useQuery<OpcUaNode[]>({
