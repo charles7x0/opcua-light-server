@@ -3,6 +3,8 @@
  * Any module can write log entries. The API exposes them for the web UI.
  */
 
+import type { SseHub } from '../api/sse-hub.js';
+
 export interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'debug';
@@ -14,6 +16,12 @@ const MAX_ENTRIES = 1000;
 
 class LogService {
   private entries: LogEntry[] = [];
+  private sseHub: SseHub | null = null;
+
+  /** Set the SSE hub for broadcasting log entries in real time. */
+  setSseHub(sseHub: SseHub): void {
+    this.sseHub = sseHub;
+  }
 
   /**
    * Add a log entry.
@@ -28,6 +36,10 @@ class LogService {
     this.entries.push(entry);
     if (this.entries.length > MAX_ENTRIES) {
       this.entries.shift();
+    }
+
+    if (this.sseHub) {
+      this.sseHub.broadcast('log:entry', entry);
     }
   }
 

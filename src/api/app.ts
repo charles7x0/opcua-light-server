@@ -29,6 +29,8 @@ import { createConnectorsRouter } from './routes/connectors.js';
 import { createS7AliasRouter } from './routes/s7-alias.js';
 import { createFileRouter } from './routes/files.js';
 import { createPkiRouter } from './routes/pki.js';
+import { createEventsRouter } from './routes/events.js';
+import { SseHub } from './sse-hub.js';
 import { logService } from '../log/index.js';
 import type { ErrorResponse } from '../types/api.js';
 
@@ -43,13 +45,19 @@ export interface AppDependencies {
   tofuManager: TofuManager;
 }
 
+/** Return type for createApp — includes both the Express app and the SseHub for event broadcasting. */
+export interface AppInstance {
+  app: Express;
+  sseHub: SseHub;
+}
+
 /**
  * Creates and configures the Express application with all routes and middleware.
  *
  * Auth middleware is applied to all routes except GET /api/server/status,
  * which is unauthenticated for health monitoring.
  */
-export function createApp(deps: AppDependencies): Express {
+export function createApp(deps: AppDependencies): AppInstance {
   const { database, processManager, configGenerator, connectorRegistry, connectorRepository, authConfig, tofuManager } = deps;
 
   const app = express();
@@ -129,6 +137,19 @@ export function createApp(deps: AppDependencies): Express {
   app.use('/api/files', createFileRouter());
   app.use('/api/pki/certificates', createPkiRouter(tofuManager));
 
+  // ─── SSE Events Endpoint ───────────────────────────────────────────────────
+  const sseHub = new SseHub();
+  sseHub.startHeartbeat();
+
+  // Wire SSE hub into event sources so they can broadcast real-time updates
+  processManager.setSseHub(sseHub);
+  if (connectorRegistry) {
+    connectorRegistry.setSseHub(sseHub);
+  }
+  logService.setSseHub(sseHub);
+
+  app.use('/api/events', createEventsRouter({ sseHub, processManager, connectorRegistry }));
+
   // ─── System Logs Endpoint ───────────────────────────────────────────────────
   app.get('/api/logs', (req: Request, res: Response) => {
     const since = req.query.since as string | undefined;
@@ -169,5 +190,5 @@ export function createApp(deps: AppDependencies): Express {
     res.status(500).json(errorResponse);
   });
 
-  return app;
+  return { app, sseHub };
 }

@@ -103,7 +103,7 @@ async function main(): Promise<void> {
   });
 
   // ─── Create and Start App ───────────────────────────────────────────────────
-  const app = createApp({ database, processManager, configGenerator, connectorRegistry, connectorRepository: connectorRepo, authConfig, tofuManager });
+  const { app, sseHub } = createApp({ database, processManager, configGenerator, connectorRegistry, connectorRepository: connectorRepo, authConfig, tofuManager });
 
   // ─── Start HTTP Server ────────────────────────────────────────────────────
   // The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt)
@@ -139,6 +139,10 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);
     logService.info('Server', `Received ${signal}. Shutting down gracefully...`);
+
+    // Shut down SSE connections
+    sseHub.shutdown();
+    console.log('SSE connections closed.');
 
     // Stop all Connector polling
     connectorRegistry.stopAll();
@@ -180,4 +184,19 @@ async function main(): Promise<void> {
 main().catch((err) => {
   console.error('Failed to start server:', err);
   process.exit(1);
+});
+
+// ─── Global Error Safety Nets ───────────────────────────────────────────────
+// Prevent the process from crashing on unhandled promise rejections or
+// uncaught exceptions from third-party libraries (e.g., socket errors from
+// the ethernet-ip library when a remote PLC drops the connection abruptly).
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (process kept alive):', err.message);
+  logService.error('Server', `Uncaught exception: ${err.message}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  console.error('Unhandled rejection (process kept alive):', msg);
+  logService.error('Server', `Unhandled rejection: ${msg}`);
 });

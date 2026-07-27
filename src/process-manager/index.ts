@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import type { ClientSession, ServerStatus, StartResult } from '../types/index.js';
 import { validateSessions } from './validate-sessions.js';
+import type { SseHub } from '../api/sse-hub.js';
 
 /**
  * ProcessManager handles the lifecycle of the open62541 OPC UA runtime process.
@@ -18,6 +19,9 @@ export class ProcessManager {
   private stopping = false;
   private crashHandlers: Array<(reason: string) => void> = [];
   private stderrBuffer = '';
+  private sseHub: SseHub | null = null;
+  private statusTimer: NodeJS.Timeout | null = null;
+  private previousSessionsJson = '[]';
 
   /**
    * @param executablePath - Path to the compiled open62541 runtime binary.
@@ -27,6 +31,14 @@ export class ProcessManager {
     private readonly executablePath: string,
     private readonly configFilePath: string
   ) {}
+
+  /**
+   * Set the SseHub instance for broadcasting real-time events.
+   * Optional — ProcessManager works fine without an SseHub (backward compatibility).
+   */
+  setSseHub(hub: SseHub): void {
+    this.sseHub = hub;
+  }
 
   /**
    * Start the open62541 runtime process.
@@ -58,6 +70,9 @@ export class ProcessManager {
 
     this.attachEventListeners(child);
 
+    this.broadcastStatus();
+    this.startStatusTimer();
+
     return {
       pid: child.pid,
       startedAt: this.startedAt,
@@ -85,6 +100,8 @@ export class ProcessManager {
       child.once('exit', () => {
         clearTimeout(timeout);
         this.cleanup();
+        this.broadcastStatus();
+        this.broadcastClients([]);
         resolve();
       });
 
@@ -120,6 +137,8 @@ export class ProcessManager {
       // Linux/Mac: send SIGUSR1 signal
       process.kill(this.process.pid, 'SIGUSR1');
     }
+
+    this.broadcastStatus();
   }
 
   /**
@@ -323,11 +342,59 @@ export class ProcessManager {
    * Clean up internal state after the process has stopped.
    */
   private cleanup(): void {
+    this.stopStatusTimer();
     this.state = 'stopped';
     this.process = null;
     this.startedAt = null;
     this.connectedClients = 0;
     this.stopping = false;
     this.stderrBuffer = '';
+    this.previousSessionsJson = '[]';
+  }
+
+  /**
+   * Broadcast the current server status via SSE.
+   */
+  private broadcastStatus(): void {
+    if (!this.sseHub) return;
+    this.sseHub.broadcast('server:status', this.getStatus());
+  }
+
+  /**
+   * Broadcast client sessions via SSE.
+   */
+  private broadcastClients(sessions: ClientSession[]): void {
+    if (!this.sseHub) return;
+    this.sseHub.broadcast('server:clients', sessions);
+  }
+
+  /**
+   * Start the periodic status timer (every 5 seconds).
+   * Broadcasts server:status and checks for client session changes.
+   */
+  private startStatusTimer(): void {
+    if (this.statusTimer) return;
+
+    this.statusTimer = setInterval(() => {
+      this.broadcastStatus();
+
+      // Check for client session changes
+      const sessions = this.readClientSessions();
+      const sessionsJson = JSON.stringify(sessions);
+      if (sessionsJson !== this.previousSessionsJson) {
+        this.previousSessionsJson = sessionsJson;
+        this.broadcastClients(sessions);
+      }
+    }, 5_000);
+  }
+
+  /**
+   * Stop the periodic status timer.
+   */
+  private stopStatusTimer(): void {
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = null;
+    }
   }
 }
