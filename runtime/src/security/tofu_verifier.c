@@ -6,7 +6,7 @@
  * are automatically trusted on first connection and persisted to disk.
  */
 
-#include "tofu_verifier.h"
+#include "security/tofu_verifier.h"
 
 #include <stdio.h>
 #include <string.h>

@@ -17,8 +17,10 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
                                                      ▲
                                                      │ IPC (value updates)
                                           ┌──────────┴───────────────────┐
-                                          │   S7 Connector (nodes7)      │
-  Siemens S7 PLCs ◄── S7 ISO-on-TCP ───► │   polling + reconnection     │
+                                          │   Connector Registry         │
+                                          │   S7 · Modbus TCP ·          │
+  Industrial PLCs ◄── S7/Modbus/CIP ────► │   EtherNet/IP                │
+                                          │   polling + reconnection     │
                                           └──────────────────────────────┘
 ```
 
@@ -27,14 +29,16 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
 - The C runtime runs as a separate OS process for isolation — a crash doesn't take down the API.
 - Communication between the API and runtime uses a JSON configuration file (written by the API, read by the runtime on start/reload).
 - SQLite provides persistence with zero external infrastructure.
+- The Control API process installs global error safety nets (`uncaughtException`, `unhandledRejection`) to survive transient errors from connector libraries (e.g., socket errors when a PLC drops abruptly). These errors are logged via the LogService and visible in the system log panel.
 
 ## Features
 
 - **Address Space Management** — CRUD for namespaces, folders, and nodes via REST API and web UI
 - **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
 - **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
-- **S7 PLC Integration** — Connect to Siemens S7 PLCs, map PLC variables to OPC UA nodes with automatic polling and reconnection
+- **Multi-Protocol PLC Integration** — Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a unified connector architecture with automatic polling, reconnection, and tag discovery
 - **Web Dashboard** — Real-time server status, uptime, connected client count, and per-client session details (app name, security policy, address, connection duration, state)
+- **Real-Time Updates (SSE)** — Single Server-Sent Events connection replaces polling; multiplexed events for status, clients, connectors, and logs
 - **Authentication** — API key or JWT protection on mutating endpoints
 
 ## Prerequisites
@@ -214,6 +218,24 @@ The OpenAPI 3.0 spec is located at [`docs/openapi.json`](docs/openapi.json).
 | GET | `/api/server/status` | Get status (unauthenticated) |
 | GET | `/api/server/clients` | List connected client sessions (unauthenticated) |
 
+### Real-Time Events (SSE)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/events` | Server-Sent Events stream (unauthenticated) |
+
+The `/api/events` endpoint provides a multiplexed SSE stream for real-time updates. It replaces polling for status, client sessions, connector state, connector values, and log entries. Event types:
+
+| Event | Payload | Trigger |
+|-------|---------|---------|
+| `server:status` | Server status object | Start/stop/reload, periodic (5s while running) |
+| `server:clients` | Client sessions array | Session connect/disconnect |
+| `connector:status` | Connector statuses array | Connector state transition |
+| `connector:values` | Current values array | Poll cycle completes |
+| `log:entry` | Log entry object | New log entry appended |
+
+A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On connect, the server sends initial state events so the client has a complete snapshot immediately.
+
 ### Security
 
 | Method | Endpoint | Description |
@@ -235,21 +257,45 @@ The OpenAPI 3.0 spec is located at [`docs/openapi.json`](docs/openapi.json).
 | GET | `/api/s7/status` | Get connection statuses |
 | GET | `/api/s7/values` | Get last-read values for all mapped variables |
 
+### Connectors (Multi-Protocol)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/connectors/connections` | Create connection (any protocol) |
+| GET | `/api/connectors/connections` | List connections (filterable by type) |
+| PUT | `/api/connectors/connections/:id` | Update connection |
+| DELETE | `/api/connectors/connections/:id` | Delete connection |
+| POST | `/api/connectors/mappings` | Create device-to-node mapping |
+| GET | `/api/connectors/mappings` | List mappings |
+| DELETE | `/api/connectors/mappings/:id` | Delete mapping |
+| GET | `/api/connectors/status` | Get all connection statuses |
+| GET | `/api/connectors/values` | Get last-read values |
+| GET | `/api/connectors/export/csv` | Export mappings as CSV |
+| POST | `/api/connectors/import/csv` | Import mappings from CSV |
+
+Supported protocol types: `s7`, `modbus-tcp`, `ethernet-ip`, `pccc`
+
+**EtherNet/IP notes:** After connecting to a Rockwell PLC, the connector performs automatic tag discovery so the library learns data types for subsequent read/write operations. Discovery failures are non-fatal — polling will still attempt reads. Transient poll errors (read timeouts, CIP protocol errors) mark affected node quality as "bad" without triggering a full reconnection, allowing the next poll cycle to recover automatically.
+
+**PCCC notes:** Connects to Allen-Bradley legacy PLCs (SLC 500, MicroLogix, PLC-5) over EtherNet/IP using file-based addressing. Addresses use standard PCCC format (e.g., `N7:0`, `F8:1`, `B3:0/5`, `T4:0.ACC`). The connector uses pass-through translation — address validation happens at mapping time only.
+
 ## Project Structure
 
 ```
 opcua-light-server/
 ├── src/
 │   ├── api/              # Express routes and app setup
-│   │   ├── routes/       # Route handlers (nodes, namespaces, folders, server, security, s7)
+│   │   ├── routes/       # Route handlers (nodes, namespaces, folders, server, security, s7, events)
 │   │   ├── app.ts        # Express app assembly
+│   │   ├── sse-hub.ts    # SSE connection manager (broadcast, heartbeat, client lifecycle)
 │   │   └── server.ts     # Entry point
 │   ├── auth/             # Authentication middleware and config
 │   ├── config-generator/ # Generates JSON config for the runtime
 │   ├── db/               # SQLite schema, database class, repositories
 │   ├── process-manager/  # Manages the open62541 child process
-│   ├── s7-connector/     # S7 PLC polling, value updates, and IPC bridge to runtime
-│   ├── types/            # TypeScript domain types and DTOs
+│   ├── connectors/      # Multi-protocol connector registry (S7, Modbus TCP, EtherNet/IP, PCCC)
+│   ├── s7-connector/    # Legacy S7 PLC connector (alias routes still active)
+│   ├── types/           # TypeScript domain types and DTOs
 │   ├── utils/            # Shared utilities (CSV parsing, etc.)
 │   └── shared/           # Shared utilities
 ├── web/                  # React web UI (Vite + Tailwind CSS)

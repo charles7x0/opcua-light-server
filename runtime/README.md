@@ -103,14 +103,76 @@ Both dependencies are fetched automatically via CMake's FetchContent module duri
 
 ```
 runtime/
-├── CMakeLists.txt      # Build configuration
-├── README.md           # This file
-├── build.ps1           # Windows build script (PowerShell)
-├── build.sh            # Linux/macOS build script (Bash)
+├── include/
+│   └── runtime_context.h          # RuntimeContext struct definition
 ├── src/
-│   └── main.c          # Runtime entry point
-└── build/              # Build artifacts (gitignored)
+│   ├── main.c                     # Entry point: arg parsing, signal setup, lifecycle
+│   ├── server.c / server.h        # Server creation, run loop, shutdown orchestration
+│   ├── config/
+│   │   ├── config_parser.c        # JSON config reading and validation
+│   │   └── config_parser.h
+│   ├── address_space/
+│   │   ├── address_space_builder.c  # Namespace registration, node creation
+│   │   ├── address_space_builder.h
+│   │   ├── address_space_clearer.c  # Recursive node deletion for reload
+│   │   ├── address_space_clearer.h
+│   │   └── data_type_table.h        # Static const type mapping table
+│   ├── ipc/
+│   │   ├── ipc_processor.c         # Stdin reading, JSON parsing, value updates
+│   │   └── ipc_processor.h
+│   ├── status/
+│   │   ├── status_writer.c         # Status JSON generation and change detection
+│   │   └── status_writer.h
+│   ├── security/
+│   │   ├── security_config.c       # PEM→DER, policy registration, endpoint filtering
+│   │   ├── security_config.h
+│   │   ├── tofu_verifier.c         # TOFU certificate verifier
+│   │   └── tofu_verifier.h
+│   └── util/
+│       ├── logging.h               # LOG_ERROR/LOG_WARN/LOG_INFO macros
+│       ├── file_io.c               # file_read_text, file_read_binary helpers
+│       ├── file_io.h
+│       ├── node_id_parser.c        # parse_node_id_string utility
+│       └── node_id_parser.h
+├── CMakeLists.txt
+├── build.ps1                        # Windows build script (PowerShell)
+├── build.sh                         # Linux/macOS build script (Bash)
+└── build/                           # CMake build output (gitignored)
 ```
+
+### Module Descriptions
+
+- **config/** — Reads and validates the JSON configuration file.
+- **address_space/** — Creates and removes OPC UA namespace objects, folder hierarchies, and variable nodes.
+- **ipc/** — Processes stdin-based inter-process communication for real-time value updates.
+- **status/** — Generates and writes the status.json file with connected client information.
+- **security/** — Configures OPC UA security policies, PEM-to-DER conversion, and TOFU certificate verification.
+- **util/** — Shared utilities: structured logging, file I/O, and NodeId string parsing.
+
+### RuntimeContext
+
+The `RuntimeContext` struct is declared in `include/runtime_context.h` and serves as the single aggregate for all mutable state that was previously stored in module-level global variables.
+
+**Fields:**
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `server` | `UA_Server*` | open62541 server handle |
+| `config_path` | `char[4096]` | Path to the JSON configuration file |
+| `status_path` | `char[4096]` | Path to the status.json output file |
+| `tofu_ctx` | `TofuVerifierContext` | TOFU certificate verifier state |
+| `stdin_buffer` | `char[65536]` | IPC stdin read buffer |
+| `stdin_buffer_len` | `size_t` | Current length of data in stdin buffer |
+| `last_status_json` | `char*` | Heap-allocated last-written status JSON for change detection |
+| `stdin_thread` | `HANDLE` (Windows) | Stdin reader thread handle |
+| `pipe_thread` | `HANDLE` (Windows) | Named pipe reload thread handle |
+| `stdin_running` | `volatile LONG` (Windows) | Stdin thread running flag |
+| `pipe_running` | `volatile LONG` (Windows) | Pipe thread running flag |
+| `stdin_cs` | `CRITICAL_SECTION` (Windows) | Critical section for stdin queue |
+| `stdin_queue` | `char*[256]` (Windows) | Thread-safe stdin line queue |
+| `stdin_queue_head/tail` | `volatile LONG` (Windows) | Queue head and tail indices |
+
+**Design rationale:** `RuntimeContext` replaces module-level global variables by being passed as a pointer to all module functions. This enables testability and eliminates shared mutable state. The only exceptions are `volatile sig_atomic_t g_running` and `volatile sig_atomic_t g_reload_requested`, which must remain global per POSIX signal handler requirements (signal handlers cannot receive user data).
 
 ## Integration with the Control API
 

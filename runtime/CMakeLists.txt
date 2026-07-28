@@ -47,7 +47,16 @@ FetchContent_MakeAvailable(cjson)
 # ─── Source Files ────────────────────────────────────────────────────────────
 set(RUNTIME_SOURCES
     src/main.c
-    src/tofu_verifier.c
+    src/server.c
+    src/config/config_parser.c
+    src/address_space/address_space_builder.c
+    src/address_space/address_space_clearer.c
+    src/ipc/ipc_processor.c
+    src/status/status_writer.c
+    src/security/security_config.c
+    src/security/tofu_verifier.c
+    src/util/file_io.c
+    src/util/node_id_parser.c
 )
 
 # ─── Executable ──────────────────────────────────────────────────────────────
@@ -64,6 +73,14 @@ target_link_libraries(opcua-runtime
 target_include_directories(opcua-runtime
     PRIVATE
         ${cjson_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/address_space
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ipc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/status
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/security
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util
 )
 
 # ─── Platform-specific link libraries ────────────────────────────────────────

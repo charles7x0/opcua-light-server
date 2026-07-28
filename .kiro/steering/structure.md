@@ -4,8 +4,9 @@
 opcua-light-server/
 ├── src/                          # Control API source (TypeScript, ES modules)
 │   ├── api/                      # Express app and route handlers
-│   │   ├── routes/               # Route modules (nodes, namespaces, object-nodes, server, security, s7, files)
+│   │   ├── routes/               # Route modules (nodes, namespaces, object-nodes, server, security, s7, files, events)
 │   │   ├── app.ts                # Express app assembly
+│   │   ├── sse-hub.ts            # SSE connection manager (broadcast, heartbeat, client lifecycle)
 │   │   ├── server.ts             # Entry point
 │   │   └── https-server.ts       # HTTPS utilities (unused — Control API is HTTP-only)
 │   ├── auth/                     # Authentication middleware and config
@@ -17,7 +18,15 @@ opcua-light-server/
 │   │   └── repositories/         # Data access layer (one per domain entity)
 │   ├── log/                      # Logging utilities (in-memory log service)
 │   ├── process-manager/          # Manages the open62541 child process lifecycle
-│   ├── s7-connector/             # S7 PLC polling, reconnection, and value update logic
+│   ├── connectors/               # Multi-protocol connector architecture
+│   │   ├── s7/                   # Siemens S7 connector (nodes7)
+│   │   ├── modbus-tcp/           # Modbus TCP connector (modbus-serial)
+│   │   ├── ethernet-ip/          # EtherNet/IP connector (ethernet-ip, with tag discovery)
+│   │   ├── pccc/                 # PCCC connector for Allen-Bradley legacy PLCs (nodepccc)
+│   │   ├── connector-registry.ts # Central registry managing all connector instances
+│   │   ├── ipc-bridge.ts         # Bridges value updates to the runtime via stdin
+│   │   └── types.ts              # Shared Connector interface and types
+│   ├── s7-connector/             # Legacy S7 connector (alias routes still active)
 │   ├── types/                    # Domain types, DTOs, and declaration files
 │   └── utils/                    # Shared utilities (CSV parsing/serialization)
 ├── web/                          # React web UI (separate npm package)
@@ -33,8 +42,9 @@ opcua-light-server/
 │       ├── layout/               # App shell, NavBar, StatusBar, LogPanel
 │       ├── screens/              # Feature screens
 │       │   ├── address-space/    # AddressSpaceSection, Tree, NodeForm, NodeDetailPanel, NamespaceManager
+│       │   ├── connectors/       # ConnectorsManager, ConnectionCard, ConnectionForm, ProtocolSelector, MappingTable
 │       │   ├── dashboard/        # Dashboard, ConnectedClientsTable
-│       │   ├── s7/               # S7ConnectionManager, ConnectionCard, ConnectionForm, MappingTable, BulkImport
+│       │   ├── s7/               # Legacy S7ConnectionManager (may redirect to connectors)
 │       │   └── security/         # SecuritySettings, SecurityModeCard, CertificateStatusCard, GenerateCertificateCard, UploadCertificateCard, CertificatePanel, utils/
 │       ├── api.ts                # Typed API client (fetch wrapper)
 │       └── main.tsx              # Entry point
@@ -69,4 +79,5 @@ opcua-light-server/
 - **Routes** are modular, one file per resource in `src/api/routes/`.
 - **Types** are centralized in `src/types/` (domain types, API DTOs, third-party declarations).
 - **Certificate utilities** are pure functions in `src/cert-generator/cert-utils.ts` (no side effects, easily testable).
+- **Connectors** implement the `Connector` interface from `src/connectors/types.ts`. Each protocol lives in its own subdirectory (e.g., `src/connectors/ethernet-ip/`). The EtherNet/IP connector performs automatic tag discovery after connecting.
 - **The Control API always uses HTTP** — OPC UA security mode does not affect the REST API transport.

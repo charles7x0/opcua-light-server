@@ -9,6 +9,9 @@
 - **Auth**: jsonwebtoken (JWT) + API key support
 - **Crypto**: node-forge (certificate generation, DER/PEM parsing)
 - **S7 PLC**: nodes7 library
+- **Modbus TCP**: modbus-serial library
+- **EtherNet/IP**: ethernet-ip library (with automatic tag discovery on connect)
+- **PCCC**: nodepccc library (Allen-Bradley SLC 500, MicroLogix, PLC-5)
 - **Build**: `tsc` (plain TypeScript compiler)
 - **Dev**: tsx (watch mode)
 
@@ -81,6 +84,7 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 |--------|------|-------------|
 | GET | `/api/server/status` | Server status (unauthenticated) |
 | GET | `/api/server/clients` | Connected client sessions (unauthenticated) |
+| GET | `/api/events` | SSE stream for real-time updates (unauthenticated) |
 | POST | `/api/server/start` | Start OPC UA runtime |
 | POST | `/api/server/stop` | Stop OPC UA runtime |
 | POST | `/api/server/reload` | Hot-reload address space |
