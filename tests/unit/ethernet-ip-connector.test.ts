@@ -328,7 +328,7 @@ describe('EthernetIPConnector', () => {
 
     it('should schedule reconnection after read error', async () => {
       connector.mockPLC.connect.mockResolvedValue(undefined);
-      connector.mockPLC.read.mockRejectedValueOnce(new Error('Timeout'));
+      connector.mockPLC.read.mockRejectedValueOnce(new Error('Connection lost'));
 
       connector.addConnection(createConnectionConfig({ reconnectIntervalMs: 5000 }));
       connector.addMapping(createMapping());

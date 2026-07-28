@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { S7Connector, type S7ValueUpdate } from '../../src/s7-connector/index.js';
-import type { S7ConnectionConfig, S7Mapping } from '../../src/types/index.js';
+import { S7Connector } from '../../src/connectors/s7/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
 
 /**
  * Mock nodes7 client instance.
@@ -26,13 +26,12 @@ class TestableS7Connector extends S7Connector {
   }
 }
 
-function createConnectionConfig(overrides: Partial<S7ConnectionConfig> = {}): S7ConnectionConfig {
+function createConnectionConfig(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
   return {
     id: 'conn-1',
+    type: 's7',
     name: 'Test PLC',
-    host: '192.168.1.100',
-    rack: 0,
-    slot: 1,
+    params: { host: '192.168.1.100', rack: 0, slot: 1 },
     pollingIntervalMs: 1000,
     reconnectIntervalMs: 5000,
     enabled: true,
@@ -41,18 +40,18 @@ function createConnectionConfig(overrides: Partial<S7ConnectionConfig> = {}): S7
   };
 }
 
-function createMapping(overrides: Partial<S7Mapping> = {}): S7Mapping {
+function createMapping(overrides: Partial<Mapping> = {}): Mapping {
   return {
     id: 'map-1',
     connectionId: 'conn-1',
     nodeId: 'node-1',
-    plcAddress: 'DB1,REAL0',
+    deviceAddress: 'DB1,REAL0',
     createdAt: new Date().toISOString(),
     ...overrides,
   };
 }
 
-describe('S7Connector', () => {
+describe('S7Connector (refactored)', () => {
   let connector: TestableS7Connector;
 
   beforeEach(() => {
@@ -65,7 +64,31 @@ describe('S7Connector', () => {
     vi.useRealTimers();
   });
 
+  describe('getType', () => {
+    it('should return "s7"', () => {
+      expect(connector.getType()).toBe('s7');
+    });
+  });
+
   describe('addConnection', () => {
+    it('should parse params JSON correctly (host, rack, slot)', () => {
+      const config = createConnectionConfig({
+        params: { host: '10.0.0.1', rack: 2, slot: 3 },
+      });
+      connector.addConnection(config);
+      connector.start();
+
+      // Verify connection was initiated with correct params from the JSON params object
+      expect(connector.mockClient.initiateConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: '10.0.0.1',
+          rack: 2,
+          slot: 3,
+        }),
+        expect.any(Function),
+      );
+    });
+
     it('should add a connection configuration', () => {
       const config = createConnectionConfig();
       connector.addConnection(config);
@@ -81,7 +104,32 @@ describe('S7Connector', () => {
       connector.addConnection(config);
 
       expect(() => connector.addConnection(config)).toThrow(
-        "Connection with id 'conn-1' already exists"
+        "Connection with id 'conn-1' already exists",
+      );
+    });
+
+    it('should throw if host param is missing', () => {
+      const config = createConnectionConfig({
+        params: { rack: 0, slot: 1 },
+      });
+
+      expect(() => connector.addConnection(config)).toThrow("requires a 'host' parameter");
+    });
+
+    it('should use default rack=0 and slot=1 when not specified', () => {
+      const config = createConnectionConfig({
+        params: { host: '10.0.0.1' },
+      });
+      connector.addConnection(config);
+      connector.start();
+
+      expect(connector.mockClient.initiateConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: '10.0.0.1',
+          rack: 0,
+          slot: 1,
+        }),
+        expect.any(Function),
       );
     });
 
@@ -104,17 +152,15 @@ describe('S7Connector', () => {
 
   describe('removeConnection', () => {
     it('should remove a connection and clean up', () => {
-      const config = createConnectionConfig();
-      connector.addConnection(config);
+      connector.addConnection(createConnectionConfig());
       connector.removeConnection('conn-1');
 
-      const statuses = connector.getStatus();
-      expect(statuses).toHaveLength(0);
+      expect(connector.getStatus()).toHaveLength(0);
     });
 
     it('should throw if connection id not found', () => {
       expect(() => connector.removeConnection('nonexistent')).toThrow(
-        "Connection with id 'nonexistent' not found"
+        "Connection with id 'nonexistent' not found",
       );
     });
 
@@ -122,7 +168,6 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
@@ -146,7 +191,7 @@ describe('S7Connector', () => {
     it('should throw if connection id not found', () => {
       const mapping = createMapping({ connectionId: 'nonexistent' });
       expect(() => connector.addMapping(mapping)).toThrow(
-        "Connection with id 'nonexistent' not found"
+        "Connection with id 'nonexistent' not found",
       );
     });
 
@@ -154,7 +199,6 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
@@ -170,14 +214,13 @@ describe('S7Connector', () => {
       connector.addMapping(createMapping());
       connector.removeMapping('map-1');
 
-      // No error means success
       expect(true).toBe(true);
     });
 
     it('should throw if mapping id not found', () => {
       connector.addConnection(createConnectionConfig());
       expect(() => connector.removeMapping('nonexistent')).toThrow(
-        "Mapping with id 'nonexistent' not found"
+        "Mapping with id 'nonexistent' not found",
       );
     });
 
@@ -185,7 +228,6 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
@@ -199,7 +241,14 @@ describe('S7Connector', () => {
   describe('start / stop', () => {
     it('should initiate connections to all enabled PLCs on start', () => {
       connector.addConnection(createConnectionConfig({ id: 'conn-1', enabled: true }));
-      connector.addConnection(createConnectionConfig({ id: 'conn-2', name: 'PLC2', host: '192.168.1.101', enabled: true }));
+      connector.addConnection(
+        createConnectionConfig({
+          id: 'conn-2',
+          name: 'PLC2',
+          params: { host: '192.168.1.101', rack: 0, slot: 1 },
+          enabled: true,
+        }),
+      );
 
       connector.start();
 
@@ -226,7 +275,6 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
@@ -242,7 +290,6 @@ describe('S7Connector', () => {
       connector.stop();
       connector.stop();
 
-      // No error means success
       expect(true).toBe(true);
     });
   });
@@ -253,23 +300,20 @@ describe('S7Connector', () => {
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // readAllItems should have been called (initial poll)
       expect(connector.mockClient.readAllItems).toHaveBeenCalled();
     });
 
     it('should emit value updates from poll results', () => {
-      const updates: S7ValueUpdate[] = [];
+      const updates: ValueUpdate[] = [];
       connector.onValueUpdate((u) => updates.push(...u));
 
       connector.addConnection(createConnectionConfig());
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
@@ -291,18 +335,15 @@ describe('S7Connector', () => {
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Initial poll
       expect(connector.mockClient.readAllItems).toHaveBeenCalledTimes(1);
 
       // Simulate successful read for initial poll
       const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
       readCallback(null, { 'DB1,REAL0': 10.0 });
 
-      // Advance time by polling interval
       vi.advanceTimersByTime(500);
 
       expect(connector.mockClient.readAllItems).toHaveBeenCalledTimes(2);
@@ -312,11 +353,9 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig());
       connector.start();
 
-      // Simulate successful connection (no mappings added)
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // readAllItems should not be called since there are no mappings
       expect(connector.mockClient.readAllItems).not.toHaveBeenCalled();
     });
   });
@@ -350,11 +389,9 @@ describe('S7Connector', () => {
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Simulate read error (connection lost)
       const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
       readCallback(new Error('Connection lost'));
 
@@ -369,13 +406,11 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig({ reconnectIntervalMs: 3000 }));
       connector.start();
 
-      // Simulate connection failure
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(new Error('Connection refused'));
 
       expect(connector.mockClient.initiateConnection).toHaveBeenCalledTimes(1);
 
-      // Advance time past reconnect interval
       vi.advanceTimersByTime(3000);
 
       expect(connector.mockClient.initiateConnection).toHaveBeenCalledTimes(2);
@@ -386,18 +421,14 @@ describe('S7Connector', () => {
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Simulate read error
       const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
       readCallback(new Error('Timeout'));
 
-      // Advance time past reconnect interval
       vi.advanceTimersByTime(5000);
 
-      // Should attempt reconnection
       expect(connector.mockClient.initiateConnection).toHaveBeenCalledTimes(2);
     });
 
@@ -405,24 +436,20 @@ describe('S7Connector', () => {
       connector.addConnection(createConnectionConfig({ reconnectIntervalMs: 1000 }));
       connector.start();
 
-      // Simulate connection failure
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(new Error('Connection refused'));
 
-      // Stop the connector
       connector.stop();
 
-      // Advance time past reconnect interval
       vi.advanceTimersByTime(1000);
 
-      // Should not attempt reconnection (only the initial attempt)
       expect(connector.mockClient.initiateConnection).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('quality status updates', () => {
-    it('should emit good quality on successful connection', () => {
-      const updates: S7ValueUpdate[] = [];
+    it('should emit quality "good" on successful connection', () => {
+      const updates: ValueUpdate[] = [];
       connector.onValueUpdate((u) => updates.push(...u));
 
       connector.addConnection(createConnectionConfig());
@@ -432,28 +459,41 @@ describe('S7Connector', () => {
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Should emit good quality for mapped nodes
       const qualityUpdates = updates.filter((u) => u.quality === 'good' && u.value === undefined);
       expect(qualityUpdates).toHaveLength(1);
       expect(qualityUpdates[0].nodeId).toBe('node-1');
     });
 
-    it('should emit bad quality on connection loss', () => {
-      const updates: S7ValueUpdate[] = [];
+    it('should emit quality "bad" on connection error', () => {
+      const updates: ValueUpdate[] = [];
       connector.onValueUpdate((u) => updates.push(...u));
 
       connector.addConnection(createConnectionConfig());
       connector.addMapping(createMapping());
       connector.start();
 
-      // Simulate successful connection
+      const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
+      connectCallback(new Error('Connection refused'));
+
+      const badUpdates = updates.filter((u) => u.quality === 'bad');
+      expect(badUpdates).toHaveLength(1);
+      expect(badUpdates[0].nodeId).toBe('node-1');
+    });
+
+    it('should emit quality "bad" on connection loss (read error)', () => {
+      const updates: ValueUpdate[] = [];
+      connector.onValueUpdate((u) => updates.push(...u));
+
+      connector.addConnection(createConnectionConfig());
+      connector.addMapping(createMapping());
+      connector.start();
+
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Clear previous updates
+      // Clear previous updates (connection good)
       updates.length = 0;
 
-      // Simulate read error (connection lost)
       const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
       readCallback(new Error('Connection lost'));
 
@@ -462,16 +502,42 @@ describe('S7Connector', () => {
       expect(badUpdates[0].nodeId).toBe('node-1');
     });
 
-    it('should emit bad quality for all mapped nodes on connection failure', () => {
-      const updates: S7ValueUpdate[] = [];
+    it('should emit quality "good" on reconnection after failure', () => {
+      const updates: ValueUpdate[] = [];
+      connector.onValueUpdate((u) => updates.push(...u));
+
+      connector.addConnection(createConnectionConfig({ reconnectIntervalMs: 1000 }));
+      connector.addMapping(createMapping());
+      connector.start();
+
+      // Initial connection fails
+      const connectCallback1 = connector.mockClient.initiateConnection.mock.calls[0][1];
+      connectCallback1(new Error('Connection refused'));
+
+      // Clear updates from the failure
+      updates.length = 0;
+
+      // Advance time to trigger reconnection
+      vi.advanceTimersByTime(1000);
+
+      // Reconnection succeeds
+      const connectCallback2 = connector.mockClient.initiateConnection.mock.calls[1][1];
+      connectCallback2(null);
+
+      const goodUpdates = updates.filter((u) => u.quality === 'good');
+      expect(goodUpdates).toHaveLength(1);
+      expect(goodUpdates[0].nodeId).toBe('node-1');
+    });
+
+    it('should emit quality "bad" for all mapped nodes on connection failure', () => {
+      const updates: ValueUpdate[] = [];
       connector.onValueUpdate((u) => updates.push(...u));
 
       connector.addConnection(createConnectionConfig());
-      connector.addMapping(createMapping({ id: 'map-1', nodeId: 'node-1', plcAddress: 'DB1,REAL0' }));
-      connector.addMapping(createMapping({ id: 'map-2', nodeId: 'node-2', plcAddress: 'DB1,REAL4' }));
+      connector.addMapping(createMapping({ id: 'map-1', nodeId: 'node-1', deviceAddress: 'DB1,REAL0' }));
+      connector.addMapping(createMapping({ id: 'map-2', nodeId: 'node-2', deviceAddress: 'DB1,REAL4' }));
       connector.start();
 
-      // Simulate connection failure
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(new Error('Timeout'));
 
@@ -488,7 +554,13 @@ describe('S7Connector', () => {
 
     it('should return status for all connections', () => {
       connector.addConnection(createConnectionConfig({ id: 'conn-1' }));
-      connector.addConnection(createConnectionConfig({ id: 'conn-2', name: 'PLC2', host: '192.168.1.101' }));
+      connector.addConnection(
+        createConnectionConfig({
+          id: 'conn-2',
+          name: 'PLC2',
+          params: { host: '192.168.1.101', rack: 0, slot: 1 },
+        }),
+      );
 
       const statuses = connector.getStatus();
       expect(statuses).toHaveLength(2);
@@ -504,7 +576,6 @@ describe('S7Connector', () => {
       const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
       connectCallback(null);
 
-      // Simulate successful read
       const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
       readCallback(null, { 'DB1,REAL0': 10.0 });
 
@@ -522,6 +593,61 @@ describe('S7Connector', () => {
       const statuses = connector.getStatus();
       expect(statuses[0].state).toBe('error');
       expect(statuses[0].errorMessage).toBe('ECONNREFUSED');
+    });
+  });
+
+  describe('getCurrentValues', () => {
+    it('should return empty array when no values have been read', () => {
+      expect(connector.getCurrentValues()).toEqual([]);
+    });
+
+    it('should return current values after successful poll', () => {
+      connector.addConnection(createConnectionConfig());
+      connector.addMapping(createMapping());
+      connector.start();
+
+      const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
+      connectCallback(null);
+
+      const readCallback = connector.mockClient.readAllItems.mock.calls[0][0];
+      readCallback(null, { 'DB1,REAL0': 42.5 });
+
+      const values = connector.getCurrentValues();
+      expect(values).toHaveLength(1);
+      expect(values[0].nodeId).toBe('node-1');
+      expect(values[0].deviceAddress).toBe('DB1,REAL0');
+      expect(values[0].connectionId).toBe('conn-1');
+      expect(values[0].value).toBe(42.5);
+      expect(values[0].quality).toBe('good');
+    });
+  });
+
+  describe('updateConnection', () => {
+    it('should update an existing connection', () => {
+      connector.addConnection(createConnectionConfig());
+      connector.start();
+
+      const connectCallback = connector.mockClient.initiateConnection.mock.calls[0][1];
+      connectCallback(null);
+
+      const updatedConfig = createConnectionConfig({
+        name: 'Updated PLC',
+        params: { host: '10.0.0.2', rack: 1, slot: 2 },
+      });
+      connector.updateConnection(updatedConfig);
+
+      // Should have disconnected old and initiated new connection
+      expect(connector.mockClient.dropConnection).toHaveBeenCalled();
+      expect(connector.mockClient.initiateConnection).toHaveBeenCalledTimes(2);
+    });
+
+    it('should add a connection if id does not exist', () => {
+      const config = createConnectionConfig({ id: 'new-conn' });
+      connector.updateConnection(config);
+
+      const statuses = connector.getStatus();
+      expect(statuses).toHaveLength(1);
+      expect(statuses[0].connectionId).toBe('new-conn');
     });
   });
 });

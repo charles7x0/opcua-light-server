@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Database } from '../../src/db/database.js';
 import { S7Repository } from '../../src/db/repositories/s7-repository.js';
-import { S7Connector } from '../../src/s7-connector/index.js';
+import { S7Connector } from '../../src/connectors/s7/index.js';
+import type { ConnectionConfig, Mapping } from '../../src/connectors/types.js';
 import { ConfigGenerator } from '../../src/config-generator/index.js';
 
 describe('S7 Mapping Lifecycle', () => {
@@ -132,6 +133,32 @@ describe('S7 Mapping Lifecycle', () => {
   });
 
   describe('S7 Connector notification on mapping changes', () => {
+    /** Helper: convert S7ConnectionConfig to the generic ConnectionConfig shape. */
+    function toConnectionConfig(s7Conn: { id: string; name: string; host: string; rack: number; slot: number; pollingIntervalMs: number; reconnectIntervalMs: number; enabled: boolean; createdAt: string }): ConnectionConfig {
+      return {
+        id: s7Conn.id,
+        type: 's7',
+        name: s7Conn.name,
+        params: { host: s7Conn.host, rack: s7Conn.rack, slot: s7Conn.slot },
+        pollingIntervalMs: s7Conn.pollingIntervalMs,
+        reconnectIntervalMs: s7Conn.reconnectIntervalMs,
+        enabled: s7Conn.enabled,
+        createdAt: s7Conn.createdAt,
+      };
+    }
+
+    /** Helper: convert S7Mapping to the generic Mapping shape. */
+    function toMapping(s7Map: { id: string; connectionId: string; nodeId: string; plcAddress: string; description?: string; createdAt: string }): Mapping {
+      return {
+        id: s7Map.id,
+        connectionId: s7Map.connectionId,
+        nodeId: s7Map.nodeId,
+        deviceAddress: s7Map.plcAddress,
+        description: s7Map.description,
+        createdAt: s7Map.createdAt,
+      };
+    }
+
     it('should add mapping to connector when created', () => {
       const connector = new S7Connector();
       const connResult = s7Repo.createConnection({
@@ -139,8 +166,8 @@ describe('S7 Mapping Lifecycle', () => {
       });
       if (!connResult.success) return;
 
-      // Add the connection to the connector
-      connector.addConnection(connResult.data);
+      // Add the connection to the connector (translated to generic shape)
+      connector.addConnection(toConnectionConfig(connResult.data));
 
       // Create a mapping and notify the connector
       const mapResult = s7Repo.createMapping({
@@ -149,7 +176,7 @@ describe('S7 Mapping Lifecycle', () => {
       if (!mapResult.success) return;
 
       // This should not throw
-      expect(() => connector.addMapping(mapResult.data)).not.toThrow();
+      expect(() => connector.addMapping(toMapping(mapResult.data))).not.toThrow();
     });
 
     it('should remove mapping from connector when deleted', () => {
@@ -159,14 +186,14 @@ describe('S7 Mapping Lifecycle', () => {
       });
       if (!connResult.success) return;
 
-      connector.addConnection(connResult.data);
+      connector.addConnection(toConnectionConfig(connResult.data));
 
       const mapResult = s7Repo.createMapping({
         connectionId: connResult.data.id, nodeId: 'n1', plcAddress: 'DB1,REAL0',
       });
       if (!mapResult.success) return;
 
-      connector.addMapping(mapResult.data);
+      connector.addMapping(toMapping(mapResult.data));
 
       // Remove mapping
       expect(() => connector.removeMapping(mapResult.data.id)).not.toThrow();
@@ -258,9 +285,20 @@ describe('S7 Mapping Lifecycle', () => {
       });
       if (!connResult.success) return;
 
-      connector.addConnection(connResult.data);
+      const toConnConfig = (c: typeof connResult.data): ConnectionConfig => ({
+        id: c.id,
+        type: 's7',
+        name: c.name,
+        params: { host: c.host, rack: c.rack, slot: c.slot },
+        pollingIntervalMs: c.pollingIntervalMs,
+        reconnectIntervalMs: c.reconnectIntervalMs,
+        enabled: c.enabled,
+        createdAt: c.createdAt,
+      });
 
-      const updatedConfig = { ...connResult.data, host: '10.0.0.2', name: 'PLC1-Updated' };
+      connector.addConnection(toConnConfig(connResult.data));
+
+      const updatedConfig = toConnConfig({ ...connResult.data, host: '10.0.0.2', name: 'PLC1-Updated' });
       // updateConnection should not throw
       expect(() => connector.updateConnection(updatedConfig)).not.toThrow();
 
