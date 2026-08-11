@@ -351,6 +351,7 @@ opcua-light-server/
 │       ├── utils/             # formatUptime, formatRelativeDuration, downloadFile
 │       └── main.tsx           # Entry point
 ├── runtime/                  # open62541 C Runtime
+│   ├── include/              # Shared C headers (runtime_context.h)
 │   ├── src/
 │   │   ├── address_space/    # Address space builder/clearer
 │   │   ├── config/           # JSON config parser
@@ -360,13 +361,18 @@ opcua-light-server/
 │   │   ├── util/             # File I/O, logging, node ID parser
 │   │   ├── main.c            # Entry point
 │   │   └── server.c          # Server lifecycle
-│   └── CMakeLists.txt        # CMake build config
+│   ├── CMakeLists.txt        # CMake build config
+│   ├── build.ps1             # Windows build script
+│   └── build.sh              # Linux/macOS build script
 ├── tests/                    # All tests (separate from src)
 │   ├── unit/                 # Unit tests (repositories, routes, middleware, connectors)
 │   ├── property/             # Property-based tests (fast-check)
 │   ├── integration/          # Integration tests (runtime lifecycle, SSE)
 │   ├── components/           # React component tests (Testing Library)
 │   └── stress/               # Performance/load tests
+├── docs/                     # Documentation
+│   ├── openapi.json          # OpenAPI 3.0 spec
+│   └── error-recovery-audit.md
 ├── data/                     # Runtime data directory
 │   ├── certs/                # Generated certificates
 │   └── pki/                  # Trust-on-First-Use certificate store
