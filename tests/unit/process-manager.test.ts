@@ -10,6 +10,9 @@ vi.mock('child_process', () => ({
 // Mock os module
 vi.mock('os', () => ({
   platform: vi.fn(() => 'linux'),
+  networkInterfaces: vi.fn(() => ({
+    eth0: [{ address: '192.168.1.100', family: 'IPv4', internal: false }],
+  })),
 }));
 
 // Mock fs module

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-08T16:33:07.932Z",
+  "generatedAt": "2026-08-11T16:50:40.002Z",
   "security": {
     "mode": "SignAndEncrypt",
     "certificatePath": "J:\\Projects\\opcua-light-server\\data\\certs\\server.der",
@@ -31,6 +31,11 @@
           "nodeId": "ns=2;s=GrupoMoura.SLR01.BitTest",
           "dataType": "Boolean",
           "parentPath": "GrupoMoura.SLR01",
+          "connectorMapping": {
+            "connectionType": "s7",
+            "connectionHost": "10.1.24.50",
+            "deviceAddress": "M0.0"
+          },
           "s7Mapping": {
             "connectionHost": "10.1.24.50",
             "plcAddress": "M0.0"
@@ -41,9 +46,25 @@
           "nodeId": "ns=2;s=GrupoMoura.SLR01.ChangeType",
           "dataType": "Boolean",
           "parentPath": "GrupoMoura.SLR01",
+          "connectorMapping": {
+            "connectionType": "s7",
+            "connectionHost": "10.1.24.50",
+            "deviceAddress": "M0.1"
+          },
           "s7Mapping": {
             "connectionHost": "10.1.24.50",
             "plcAddress": "M0.1"
+          }
+        },
+        {
+          "name": "Rockwell",
+          "nodeId": "ns=2;s=GrupoMoura.SLR02.Rockwell",
+          "dataType": "Double",
+          "parentPath": "GrupoMoura.SLR02",
+          "connectorMapping": {
+            "connectionType": "ethernet-ip",
+            "connectionHost": "127.0.0.1",
+            "deviceAddress": "Temperature"
           }
         },
         {
@@ -51,9 +72,29 @@
           "nodeId": "ns=2;s=GrupoMoura.SLR02.Test1",
           "dataType": "Boolean",
           "parentPath": "GrupoMoura.SLR02",
+          "connectorMapping": {
+            "connectionType": "s7",
+            "connectionHost": "10.1.24.50",
+            "deviceAddress": "M0.2"
+          },
           "s7Mapping": {
             "connectionHost": "10.1.24.50",
             "plcAddress": "M0.2"
+          }
+        },
+        {
+          "name": "Test4",
+          "nodeId": "ns=2;s=GrupoMoura.SLR01.Test4",
+          "dataType": "Boolean",
+          "parentPath": "GrupoMoura.SLR01",
+          "connectorMapping": {
+            "connectionType": "s7",
+            "connectionHost": "10.1.24.50",
+            "deviceAddress": "M0.3"
+          },
+          "s7Mapping": {
+            "connectionHost": "10.1.24.50",
+            "plcAddress": "M0.3"
           }
         }
       ]

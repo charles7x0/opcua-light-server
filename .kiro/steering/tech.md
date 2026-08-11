@@ -72,6 +72,7 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3100` | Control API listen port |
+| `OPCUA_PORT` | `4840` | OPC UA runtime listen port |
 | `AUTH_MODE` | `none` | `none`, `api-key`, or `jwt` |
 | `API_KEYS` | — | Comma-separated valid API keys |
 | `JWT_SECRET` | — | JWT verification secret |

@@ -16,6 +16,8 @@ export interface ServerRouterOptions {
   configGenerator: ConfigGenerator;
   connectorRegistry?: ConnectorRegistry;
   configFilePath?: string;
+  /** OPC UA runtime port (included in status response). */
+  opcuaPort?: number;
 }
 
 /**
@@ -34,6 +36,7 @@ export function createServerRouter(options: ServerRouterOptions): Router {
     configGenerator,
     connectorRegistry,
     configFilePath = 'runtime/config.json',
+    opcuaPort = 4840,
   } = options;
 
   const router = Router();
@@ -182,6 +185,7 @@ export function createServerRouter(options: ServerRouterOptions): Router {
   router.get('/status', (req: Request, res: Response): void => {
     try {
       const status = processManager.getStatus();
+      status.opcuaPort = opcuaPort;
       res.status(200).json(status);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to get server status';

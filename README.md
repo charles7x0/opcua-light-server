@@ -101,6 +101,7 @@ npm run test:integration  # Integration tests
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3100` | Control API listen port |
+| `OPCUA_PORT` | `4840` | OPC UA runtime listen port |
 | `AUTH_MODE` | `none` | Authentication mode: `none`, `api-key`, or `jwt` |
 | `API_KEYS` | — | Comma-separated list of valid API keys |
 | `JWT_SECRET` | — | Secret for JWT token verification |

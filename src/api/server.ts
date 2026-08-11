@@ -18,6 +18,9 @@ import { logService } from '../log/index.js';
 /** Default port for the Control API. */
 const DEFAULT_PORT = 3100;
 
+/** Default OPC UA runtime port. */
+const DEFAULT_OPCUA_PORT = 4840;
+
 /** Default SQLite database file path. */
 const DEFAULT_DB_PATH = 'runtime/opcua-light.db';
 
@@ -33,6 +36,7 @@ const DEFAULT_CONFIG_PATH = 'runtime/config.json';
 async function main(): Promise<void> {
   // ─── Configuration from environment ─────────────────────────────────────────
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
+  const opcuaPort = parseInt(process.env.OPCUA_PORT || String(DEFAULT_OPCUA_PORT), 10);
   const dbPath = process.env.DB_PATH || DEFAULT_DB_PATH;
   const runtimePath = process.env.RUNTIME_PATH || DEFAULT_RUNTIME_PATH;
   const configPath = process.env.CONFIG_PATH || DEFAULT_CONFIG_PATH;
@@ -103,7 +107,7 @@ async function main(): Promise<void> {
   });
 
   // ─── Create and Start App ───────────────────────────────────────────────────
-  const { app, sseHub } = createApp({ database, processManager, configGenerator, connectorRegistry, connectorRepository: connectorRepo, authConfig, tofuManager });
+  const { app, sseHub } = createApp({ database, processManager, configGenerator, connectorRegistry, connectorRepository: connectorRepo, authConfig, tofuManager, opcuaPort });
 
   // ─── Start HTTP Server ────────────────────────────────────────────────────
   // The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt)

@@ -43,6 +43,8 @@ export interface AppDependencies {
   connectorRepository?: ConnectorRepository;
   authConfig: AuthConfig;
   tofuManager: TofuManager;
+  /** OPC UA runtime port (passed to status endpoint). */
+  opcuaPort?: number;
 }
 
 /** Return type for createApp — includes both the Express app and the SseHub for event broadcasting. */
@@ -58,7 +60,7 @@ export interface AppInstance {
  * which is unauthenticated for health monitoring.
  */
 export function createApp(deps: AppDependencies): AppInstance {
-  const { database, processManager, configGenerator, connectorRegistry, connectorRepository, authConfig, tofuManager } = deps;
+  const { database, processManager, configGenerator, connectorRegistry, connectorRepository, authConfig, tofuManager, opcuaPort } = deps;
 
   const app = express();
 
@@ -130,7 +132,7 @@ export function createApp(deps: AppDependencies): AppInstance {
   const objectNodeRouter = createObjectNodeRouter(database);
   app.use('/api', objectNodeRouter);
 
-  app.use('/api/server', createServerRouter({ processManager, configGenerator, connectorRegistry }));
+  app.use('/api/server', createServerRouter({ processManager, configGenerator, connectorRegistry, opcuaPort }));
   app.use('/api/security', createSecurityRouter(securityRepo));
   app.use('/api/connectors', createConnectorsRouter(connectorRepo, connectorRegistry, database));
   app.use('/api/s7', createS7AliasRouter(connectorRepo, connectorRegistry, database));

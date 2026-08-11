@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dashboard } from '../screens/dashboard/Dashboard';
+import { Dashboard } from '../screens/dashboard';
 import { AddressSpaceSection } from '../screens/address-space/AddressSpaceSection';
 import { SecuritySettings } from '../screens/security/SecuritySettings';
 import { ConnectorsManager } from '../screens/connectors/ConnectorsManager';

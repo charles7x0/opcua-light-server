@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getServerStatus, getSecurityConfig, type ServerStatus, type SecurityConfig } from '../api';
+import { useServerStatus } from '../hooks/useServerStatus';
+import { useSecurityConfig } from '../hooks/useSecurityConfig';
 import { formatUptime } from '../utils/formatUptime';
 import { StatusDot, StatusBarItem, StatusBarAlert, Button } from '../components';
 import { type StatusDotColor } from '../components/styles';
@@ -54,18 +54,8 @@ export interface StatusBarProps {
 export function StatusBar({ connectionState }: StatusBarProps) {
   const [logOpen, setLogOpen] = useState(false);
 
-  const { data: status } = useQuery<ServerStatus>({
-    queryKey: ['server-status'],
-    queryFn: getServerStatus,
-    retry: 1,
-  });
-
-  const { data: securityConfig } = useQuery<SecurityConfig>({
-    queryKey: ['security'],
-    queryFn: getSecurityConfig,
-    refetchInterval: 30000,
-    retry: 1,
-  });
+  const { data: status } = useServerStatus();
+  const { data: securityConfig } = useSecurityConfig();
 
   const backendDown = connectionState === 'disconnected';
   const runtimeState = status?.state ?? 'unknown';

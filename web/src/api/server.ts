@@ -6,6 +6,10 @@ export interface ServerStatus {
   pid?: number;
   connectedClients?: number;
   lastError?: string;
+  /** Primary non-loopback IPv4 address of the server host. */
+  hostname?: string;
+  /** OPC UA runtime port (default: 4840). */
+  opcuaPort?: number;
 }
 
 export interface ClientSession {

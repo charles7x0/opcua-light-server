@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
-import { platform } from 'os';
+import { networkInterfaces, platform } from 'os';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import type { ClientSession, ServerStatus, StartResult } from '../types/index.js';
@@ -147,6 +147,7 @@ export class ProcessManager {
   getStatus(): ServerStatus {
     const status: ServerStatus = {
       state: this.state,
+      hostname: detectPrimaryIp(),
     };
 
     if (this.state === 'running' && this.startedAt) {
@@ -397,4 +398,22 @@ export class ProcessManager {
       this.statusTimer = null;
     }
   }
+}
+
+/**
+ * Detect the primary non-loopback IPv4 address of this host.
+ * Returns the first address found, or '127.0.0.1' if none detected.
+ */
+function detectPrimaryIp(): string {
+  const interfaces = networkInterfaces();
+  for (const name in interfaces) {
+    const nets = interfaces[name];
+    if (!nets) continue;
+    for (const net of nets) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
 }

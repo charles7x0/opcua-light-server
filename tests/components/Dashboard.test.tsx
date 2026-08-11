@@ -11,6 +11,11 @@ vi.mock('../../web/src/api', () => ({
   stopServer: vi.fn(),
   reloadServer: vi.fn(),
   getConnectedClients: vi.fn(),
+  getSecurityConfig: vi.fn().mockResolvedValue({ mode: 'None' }),
+  getConnectorStatus: vi.fn().mockResolvedValue([]),
+  getConnections: vi.fn().mockResolvedValue([]),
+  getNamespaces: vi.fn().mockResolvedValue([]),
+  getNodes: vi.fn().mockResolvedValue([]),
 }));
 
 import { getServerStatus, startServer, stopServer, reloadServer, getConnectedClients } from '../../web/src/api';
@@ -69,9 +74,9 @@ describe('Dashboard', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('PID: 12345')).toBeInTheDocument();
-    expect(screen.getByText('1h 1m 1s')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('PID 12345')).toBeInTheDocument();
+    expect(screen.getByText(/1h 1m 1s/)).toBeInTheDocument();
+    expect(screen.getByText(/3 client/)).toBeInTheDocument();
   });
 
   it('renders stopped status', async () => {
@@ -167,7 +172,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole('button', { name: 'Start' });
+    const startButton = screen.getByRole('button', { name: /Start/i });
     expect(startButton).toBeDisabled();
   });
 
@@ -182,7 +187,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Stopped')).toBeInTheDocument();
     });
 
-    const stopButton = screen.getByRole('button', { name: 'Stop' });
+    const stopButton = screen.getByRole('button', { name: /Stop/i });
     expect(stopButton).toBeDisabled();
   });
 
@@ -197,7 +202,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Stopped')).toBeInTheDocument();
     });
 
-    const reloadButton = screen.getByRole('button', { name: 'Reload' });
+    const reloadButton = screen.getByRole('button', { name: /Reload/i });
     expect(reloadButton).toBeDisabled();
   });
 
@@ -212,7 +217,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Stopped')).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole('button', { name: 'Start' });
+    const startButton = screen.getByRole('button', { name: /Start/i });
     await user.click(startButton);
 
     expect(mockedStartServer).toHaveBeenCalledOnce();
@@ -233,7 +238,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
-    const stopButton = screen.getByRole('button', { name: 'Stop' });
+    const stopButton = screen.getByRole('button', { name: /Stop/i });
     await user.click(stopButton);
 
     expect(mockedStopServer).toHaveBeenCalledOnce();
@@ -254,7 +259,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
-    const reloadButton = screen.getByRole('button', { name: 'Reload' });
+    const reloadButton = screen.getByRole('button', { name: /Reload/i });
     await user.click(reloadButton);
 
     expect(mockedReloadServer).toHaveBeenCalledOnce();
