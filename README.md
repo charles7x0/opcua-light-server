@@ -37,7 +37,7 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
 - **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
 - **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
 - **Multi-Protocol PLC Integration** — Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a unified connector architecture with automatic polling, reconnection, and tag discovery
-- **Web Dashboard** — Real-time server status, uptime, connected client count, and per-client session details (app name, security policy, address, connection duration, state)
+- **Web Dashboard** — Real-time server status with connector health overview, security/certificate summary, address space stats, system info (endpoint URL with copy), and per-client session details
 - **Real-Time Updates (SSE)** — Single Server-Sent Events connection replaces polling; multiplexed events for status, clients, connectors, and logs
 - **Authentication** — API key or JWT protection on mutating endpoints
 
@@ -53,28 +53,27 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
 # 1. Install Node.js dependencies
 npm install
 
-# 2. Build the Control API
+# 2. Copy the environment file and adjust as needed
+cp .env.example .env
+
+# 3. Build the Control API
 npm run build
 
-# 3. Build the Web UI
+# 4. Build the Web UI
 npm run build:web
 
-# 4. Build the OPC UA runtime
+# 5. Build the OPC UA runtime
 cd runtime
 mkdir build && cd build
 cmake ..
 cmake --build .
 cd ../..
 
-# 5. Configure authentication (see Configuration section)
-export AUTH_MODE=api-key
-export API_KEYS=my-secret-key
-
 # 6. Start the server
 npm start
 ```
 
-The Control API starts on port 3100 by default. The web UI is served at the root path (`/`).
+The Control API starts on port 3100 by default (configurable via `PORT` in `.env`). The web UI is served at the root path (`/`).
 
 ## Development
 
@@ -98,6 +97,12 @@ npm run test:integration  # Integration tests
 
 ### Environment Variables
 
+Configuration is managed via a `.env` file in the project root (loaded automatically by `--env-file`). Copy `.env.example` to get started:
+
+```bash
+cp .env.example .env
+```
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3100` | Control API listen port |
@@ -106,8 +111,9 @@ npm run test:integration  # Integration tests
 | `API_KEYS` | — | Comma-separated list of valid API keys |
 | `JWT_SECRET` | — | Secret for JWT token verification |
 | `JWT_ISSUER` | — | Optional expected JWT issuer claim |
-| `DB_PATH` | `./data/opcua-light.db` | SQLite database file path |
-| `RUNTIME_PATH` | `./runtime/opcua-runtime` | Path to the compiled open62541 binary |
+| `DB_PATH` | `runtime/opcua-light.db` | SQLite database file path |
+| `RUNTIME_PATH` | `runtime/opcua-runtime` | Path to the compiled open62541 binary |
+| `CONFIG_PATH` | `runtime/config.json` | Generated config file path |
 
 ### Authentication
 
@@ -284,41 +290,87 @@ Supported protocol types: `s7`, `modbus-tcp`, `ethernet-ip`, `pccc`
 
 ```
 opcua-light-server/
-├── src/
-│   ├── api/              # Express routes and app setup
-│   │   ├── routes/       # Route handlers (nodes, namespaces, folders, server, security, s7, events)
-│   │   ├── app.ts        # Express app assembly
-│   │   ├── sse-hub.ts    # SSE connection manager (broadcast, heartbeat, client lifecycle)
-│   │   └── server.ts     # Entry point
-│   ├── auth/             # Authentication middleware and config
-│   ├── config-generator/ # Generates JSON config for the runtime
-│   ├── db/               # SQLite schema, database class, repositories
-│   ├── process-manager/  # Manages the open62541 child process
-│   ├── connectors/      # Multi-protocol connector registry (S7, Modbus TCP, EtherNet/IP, PCCC)
-│   ├── s7-connector/    # Legacy S7 PLC connector (alias routes still active)
-│   ├── types/           # TypeScript domain types and DTOs
-│   ├── utils/            # Shared utilities (CSV parsing, etc.)
-│   └── shared/           # Shared utilities
-├── web/                  # React web UI (Vite + Tailwind CSS)
+├── .env.example              # Environment variable template
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript config (backend)
+├── tsconfig.web.json         # TypeScript config (web references)
+├── vitest.config.ts          # Base Vitest config
+├── vitest.workspace.ts       # Multi-project test workspace
+├── src/                      # Control API source (TypeScript, ES modules)
+│   ├── api/
+│   │   ├── routes/           # Route modules (nodes, namespaces, object-nodes, server,
+│   │   │                     #   security, connectors, s7-alias, files, events, pki)
+│   │   ├── app.ts            # Express app assembly
+│   │   ├── server.ts         # Entry point
+│   │   └── sse-hub.ts        # SSE connection manager
+│   ├── auth/                 # Authentication middleware and config
+│   ├── cert-generator/       # Certificate generation, DER/PEM conversion, validation
+│   ├── config-generator/     # Generates JSON config consumed by the C runtime
+│   ├── connectors/           # Multi-protocol connector architecture
+│   │   ├── s7/              # Siemens S7 (nodes7)
+│   │   ├── modbus-tcp/      # Modbus TCP (modbus-serial)
+│   │   ├── ethernet-ip/     # EtherNet/IP (ethernet-ip, with tag discovery)
+│   │   ├── pccc/            # Allen-Bradley PCCC (nodepccc)
+│   │   ├── connector-registry.ts
+│   │   ├── ipc-bridge.ts    # Bridges value updates to runtime via stdin
+│   │   └── types.ts         # Shared Connector interface
+│   ├── db/
+│   │   ├── repositories/    # Data access layer (one per domain entity)
+│   │   ├── database.ts      # SQLite wrapper
+│   │   └── schema.sql       # Database schema
+│   ├── log/                  # In-memory log service
+│   ├── process-manager/      # Manages the open62541 child process lifecycle
+│   ├── tofu-manager/         # Trust-on-First-Use certificate management
+│   ├── types/                # Domain types, DTOs, declaration files
+│   └── utils/                # Shared utilities (CSV parsing)
+├── web/                      # React Web UI (separate npm package)
 │   └── src/
-│       ├── components/   # Shared UI primitives (actions/, feedback/, inputs/, layout/)
-│       ├── hooks/        # Custom React hooks (useNodePaths, etc.)
-│       ├── layout/       # App shell, NavBar, StatusBar, LogPanel
-│       ├── screens/      # Feature screens (address-space/, dashboard/, s7/, security/)
-│       ├── api.ts        # Typed API client
-│       └── main.tsx      # Entry point
-├── runtime/              # open62541 C runtime
-│   ├── src/main.c        # Runtime entry point
-│   └── CMakeLists.txt    # CMake build config
-├── tests/
-│   ├── unit/             # Unit tests
-│   ├── property/         # Property-based tests (fast-check)
-│   ├── integration/      # Integration tests
-│   └── components/       # React component tests
-├── package.json
-├── tsconfig.json
-├── vitest.config.ts
-└── vitest.workspace.ts
+│       ├── api/              # Typed API client modules (one per domain)
+│       ├── components/       # Shared UI primitives
+│       │   ├── actions/      # Button, CopyButton, FileButton, ConfirmDialog
+│       │   ├── feedback/     # Alert, CardPlaceholder
+│       │   ├── inputs/       # Input, Select, Textarea, FormField
+│       │   ├── layout/       # Card, Badge, InfoRow, StatusDot
+│       │   └── styles.ts     # Centralized Tailwind class maps
+│       ├── hooks/            # Custom React hooks
+│       │   ├── useServerStatus.ts
+│       │   ├── useSecurityConfig.ts
+│       │   ├── useServerControls.ts
+│       │   ├── useSSE.ts
+│       │   ├── useLogStream.ts
+│       │   └── useNodePaths.ts
+│       ├── layout/           # App shell, NavBar, StatusBar, LogPanel
+│       ├── screens/
+│       │   ├── address-space/  # Tree, NodeForm, NodeDetailPanel, NamespaceManager
+│       │   ├── connectors/    # ConnectorsManager, ConnectionCard/Form, MappingTable
+│       │   ├── dashboard/     # ServerIdentityStrip, ConnectorHealthPanel,
+│       │   │                  #   CertificateHealthPanel, AddressSpaceSummaryPanel,
+│       │   │                  #   SystemInfoPanel, ConnectedClientsTable
+│       │   ├── s7/            # Legacy S7ConnectionManager
+│       │   └── security/      # SecuritySettings, CertificatePanel, GenerateCertificateCard
+│       ├── utils/             # formatUptime, formatRelativeDuration, downloadFile
+│       └── main.tsx           # Entry point
+├── runtime/                  # open62541 C Runtime
+│   ├── src/
+│   │   ├── address_space/    # Address space builder/clearer
+│   │   ├── config/           # JSON config parser
+│   │   ├── ipc/              # Stdin IPC processor (value updates)
+│   │   ├── security/         # Security config, TOFU verifier
+│   │   ├── status/           # status.json writer (client sessions)
+│   │   ├── util/             # File I/O, logging, node ID parser
+│   │   ├── main.c            # Entry point
+│   │   └── server.c          # Server lifecycle
+│   └── CMakeLists.txt        # CMake build config
+├── tests/                    # All tests (separate from src)
+│   ├── unit/                 # Unit tests (repositories, routes, middleware, connectors)
+│   ├── property/             # Property-based tests (fast-check)
+│   ├── integration/          # Integration tests (runtime lifecycle, SSE)
+│   ├── components/           # React component tests (Testing Library)
+│   └── stress/               # Performance/load tests
+├── data/                     # Runtime data directory
+│   ├── certs/                # Generated certificates
+│   └── pki/                  # Trust-on-First-Use certificate store
+└── dist/                     # Compiled JS output (gitignored)
 ```
 
 ## Testing
