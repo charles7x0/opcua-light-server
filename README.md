@@ -36,7 +36,7 @@ A lightweight OPC UA server system with a Node.js/Express Control API, an [open6
 - **Address Space Management** — CRUD for namespaces, folders, and nodes via REST API and web UI
 - **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
 - **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
-- **Multi-Protocol PLC Integration** — Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a unified connector architecture with automatic polling, reconnection, and tag discovery
+- **Multi-Protocol PLC Integration** — Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a plugin-based connector architecture with automatic discovery, polling, reconnection, and tag discovery
 - **Web Dashboard** — Real-time server status with connector health overview, security/certificate summary, address space stats, system info (endpoint URL with copy), and per-client session details
 - **Real-Time Updates (SSE)** — Single Server-Sent Events connection replaces polling; multiplexed events for status, clients, connectors, and logs
 - **Authentication** — API key or JWT protection on mutating endpoints
@@ -114,6 +114,7 @@ cp .env.example .env
 | `DB_PATH` | `runtime/opcua-light.db` | SQLite database file path |
 | `RUNTIME_PATH` | `runtime/opcua-runtime` | Path to the compiled open62541 binary |
 | `CONFIG_PATH` | `runtime/config.json` | Generated config file path |
+| `CONNECTOR_PLUGINS_DIR` | — | Optional path to external connector plugins directory |
 
 ### Authentication
 
@@ -268,6 +269,7 @@ A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/connectors/protocols` | List available protocol plugins with metadata and parameter schemas (unauthenticated) |
 | POST | `/api/connectors/connections` | Create connection (any protocol) |
 | GET | `/api/connectors/connections` | List connections (filterable by type) |
 | PUT | `/api/connectors/connections/:id` | Update connection |
@@ -281,6 +283,8 @@ A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On
 | POST | `/api/connectors/import/csv` | Import mappings from CSV |
 
 Supported protocol types: `s7`, `modbus-tcp`, `ethernet-ip`, `pccc`
+
+**Plugin architecture:** Connectors are discovered automatically at startup from `src/connectors/`. Each connector implements the `ConnectorPlugin` interface (extending `Connector` with `getMetadata()`) and exposes a `ParamFieldSchema[]` describing its connection parameters. The frontend fetches this schema via `GET /api/connectors/protocols` to render dynamic forms. New protocols can be added by creating a subdirectory with an `index.ts` exporting a `ConnectorPlugin` class — no changes to core files required.
 
 **EtherNet/IP notes:** After connecting to a Rockwell PLC, the connector performs automatic tag discovery so the library learns data types for subsequent read/write operations. Discovery failures are non-fatal — polling will still attempt reads. Transient poll errors (read timeouts, CIP protocol errors) mark affected node quality as "bad" without triggering a full reconnection, allowing the next poll cycle to recover automatically.
 
@@ -306,14 +310,16 @@ opcua-light-server/
 │   ├── auth/                 # Authentication middleware and config
 │   ├── cert-generator/       # Certificate generation, DER/PEM conversion, validation
 │   ├── config-generator/     # Generates JSON config consumed by the C runtime
-│   ├── connectors/           # Multi-protocol connector architecture
+│   ├── connectors/           # Multi-protocol connector plugin architecture
 │   │   ├── s7/              # Siemens S7 (nodes7)
 │   │   ├── modbus-tcp/      # Modbus TCP (modbus-serial)
 │   │   ├── ethernet-ip/     # EtherNet/IP (ethernet-ip, with tag discovery)
 │   │   ├── pccc/            # Allen-Bradley PCCC (nodepccc)
 │   │   ├── connector-registry.ts
 │   │   ├── ipc-bridge.ts    # Bridges value updates to runtime via stdin
-│   │   └── types.ts         # Shared Connector interface
+│   │   ├── params-validator.ts  # Validates connection params against plugin schema
+│   │   ├── plugin-loader.ts # Auto-discovers connector plugins at startup
+│   │   └── types.ts         # Connector, ConnectorPlugin, ConnectorMetadata interfaces
 │   ├── db/
 │   │   ├── repositories/    # Data access layer (one per domain entity)
 │   │   ├── database.ts      # SQLite wrapper

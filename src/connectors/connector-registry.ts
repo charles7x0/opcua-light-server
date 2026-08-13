@@ -1,4 +1,4 @@
-import { Connector, ConnectorType, ConnectionStatus, CurrentValue, ValueUpdateCallback } from './types.js';
+import { Connector, ConnectorType, ConnectorMetadata, ParamFieldSchema, ConnectionStatus, CurrentValue, ValueUpdateCallback } from './types.js';
 import type { SseHub } from '../api/sse-hub.js';
 
 const STATUS_POLL_INTERVAL_MS = 3_000;
@@ -9,6 +9,7 @@ const STATUS_POLL_INTERVAL_MS = 3_000;
  */
 export class ConnectorRegistry {
   private connectors: Map<ConnectorType, Connector> = new Map();
+  private metadata: Map<ConnectorType, ConnectorMetadata> = new Map();
   private valueUpdateCallback: ValueUpdateCallback | null = null;
   private sseHub: SseHub | null = null;
   private statusPollInterval: NodeJS.Timeout | null = null;
@@ -20,8 +21,11 @@ export class ConnectorRegistry {
   }
 
   /** Register a connector instance by its type. */
-  register(connector: Connector): void {
+  register(connector: Connector, metadata?: ConnectorMetadata): void {
     this.connectors.set(connector.getType(), connector);
+    if (metadata) {
+      this.metadata.set(connector.getType(), metadata);
+    }
     connector.onValueUpdate((updates) => {
       if (this.valueUpdateCallback) {
         this.valueUpdateCallback(updates);
@@ -69,6 +73,21 @@ export class ConnectorRegistry {
       values.push(...connector.getCurrentValues());
     }
     return values;
+  }
+
+  /** Get metadata for all registered connectors. */
+  getProtocolsMetadata(): ConnectorMetadata[] {
+    return Array.from(this.metadata.values());
+  }
+
+  /** Get metadata for a specific connector type. */
+  getProtocolMetadata(type: ConnectorType): ConnectorMetadata | undefined {
+    return this.metadata.get(type);
+  }
+
+  /** Get the paramsSchema for a connector type (for validation). */
+  getParamsSchema(type: ConnectorType): ParamFieldSchema[] | undefined {
+    return this.metadata.get(type)?.paramsSchema;
   }
 
   /** Register a single callback to receive forwarded value updates from all connectors. */

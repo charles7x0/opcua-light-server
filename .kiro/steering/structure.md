@@ -18,14 +18,16 @@ opcua-light-server/
 │   │   └── repositories/         # Data access layer (one per domain entity)
 │   ├── log/                      # Logging utilities (in-memory log service)
 │   ├── process-manager/          # Manages the open62541 child process lifecycle
-│   ├── connectors/               # Multi-protocol connector architecture
+│   ├── connectors/               # Multi-protocol connector plugin architecture
 │   │   ├── s7/                   # Siemens S7 connector (nodes7)
 │   │   ├── modbus-tcp/           # Modbus TCP connector (modbus-serial)
 │   │   ├── ethernet-ip/          # EtherNet/IP connector (ethernet-ip, with tag discovery)
 │   │   ├── pccc/                 # PCCC connector for Allen-Bradley legacy PLCs (nodepccc)
 │   │   ├── connector-registry.ts # Central registry managing all connector instances
 │   │   ├── ipc-bridge.ts         # Bridges value updates to the runtime via stdin
-│   │   └── types.ts              # Shared Connector interface and types
+│   │   ├── params-validator.ts   # Validates connection params against plugin paramsSchema
+│   │   ├── plugin-loader.ts      # Auto-discovers and loads connector plugins at startup
+│   │   └── types.ts              # Connector, ConnectorPlugin, ConnectorMetadata, ParamFieldSchema
 │   ├── s7-connector/             # Legacy S7 connector (alias routes still active)
 │   ├── types/                    # Domain types, DTOs, and declaration files
 │   └── utils/                    # Shared utilities (CSV parsing/serialization)
@@ -79,5 +81,5 @@ opcua-light-server/
 - **Routes** are modular, one file per resource in `src/api/routes/`.
 - **Types** are centralized in `src/types/` (domain types, API DTOs, third-party declarations).
 - **Certificate utilities** are pure functions in `src/cert-generator/cert-utils.ts` (no side effects, easily testable).
-- **Connectors** implement the `Connector` interface from `src/connectors/types.ts`. Each protocol lives in its own subdirectory (e.g., `src/connectors/ethernet-ip/`). The EtherNet/IP connector performs automatic tag discovery after connecting.
+- **Connectors** implement the `ConnectorPlugin` interface from `src/connectors/types.ts` (extends `Connector` with `getMetadata()`). Each protocol lives in its own subdirectory (e.g., `src/connectors/ethernet-ip/`). Plugins are auto-discovered at startup by `plugin-loader.ts` — no manual imports in `server.ts` needed. The EtherNet/IP connector performs automatic tag discovery after connecting.
 - **The Control API always uses HTTP** — OPC UA security mode does not affect the REST API transport.

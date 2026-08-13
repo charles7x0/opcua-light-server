@@ -90,3 +90,56 @@ export interface Connector {
   /** Register callback for batched value updates after each poll cycle. */
   onValueUpdate(callback: ValueUpdateCallback): void;
 }
+
+/** Describes a single connection parameter field. */
+export interface ParamFieldSchema {
+  /** Internal field key (used in params Record). */
+  key: string;
+  /** Human-readable label for the form field. */
+  label: string;
+  /** Input type for rendering. */
+  type: 'text' | 'number' | 'boolean' | 'select';
+  /** Whether this field is required. */
+  required: boolean;
+  /** Default value (as string for form pre-fill). */
+  defaultValue?: string | number | boolean;
+  /** Placeholder text for text/number inputs. */
+  placeholder?: string;
+  /** Minimum value for number fields. */
+  min?: number;
+  /** Maximum value for number fields. */
+  max?: number;
+  /** Options for select fields. */
+  options?: { value: string; label: string }[];
+  /** Validation pattern (regex string) for text fields. */
+  pattern?: string;
+  /** Validation error message when pattern fails. */
+  patternMessage?: string;
+  /** Field description/help text. */
+  description?: string;
+}
+
+/** Metadata descriptor for a connector plugin. */
+export interface ConnectorMetadata {
+  /** Protocol identifier string (e.g., 's7', 'modbus-tcp'). Must be unique. */
+  type: ConnectorType;
+  /** Human-readable display name (e.g., 'Siemens S7'). */
+  displayName: string;
+  /** Optional protocol description. */
+  description?: string;
+  /** Icon identifier or emoji for UI display. */
+  icon?: string;
+  /** Optional plugin version (e.g., '1.0.0'). Useful for debugging. */
+  version?: string;
+  /** Typed schema of connection parameters for dynamic form rendering. */
+  paramsSchema: ParamFieldSchema[];
+}
+
+/**
+ * Extended Connector interface for plugin-based connectors.
+ * Adds metadata support to the base Connector interface.
+ */
+export interface ConnectorPlugin extends Connector {
+  /** Returns the metadata descriptor for this connector's protocol. */
+  getMetadata(): ConnectorMetadata;
+}

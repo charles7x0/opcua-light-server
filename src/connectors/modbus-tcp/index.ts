@@ -1,6 +1,7 @@
 import ModbusRTU from 'modbus-serial';
 import type {
-  Connector,
+  ConnectorPlugin,
+  ConnectorMetadata,
   ConnectorType,
   ConnectionConfig,
   ConnectionStatus,
@@ -68,7 +69,7 @@ export interface ModbusLogEntry {
  * On connection loss, affected node quality is set to "bad".
  * On reconnection, polling resumes and node quality is restored to "good".
  */
-export class ModbusConnector implements Connector {
+export class ModbusConnector implements ConnectorPlugin {
   private connections: Map<string, ManagedConnection> = new Map();
   private running = false;
   private valueUpdateCallback: ValueUpdateCallback | null = null;
@@ -79,6 +80,41 @@ export class ModbusConnector implements Connector {
   /** Returns the protocol type identifier. */
   getType(): ConnectorType {
     return 'modbus-tcp';
+  }
+
+  /** Returns the metadata descriptor for the Modbus TCP protocol. */
+  getMetadata(): ConnectorMetadata {
+    return {
+      type: 'modbus-tcp',
+      displayName: 'Modbus TCP',
+      paramsSchema: [
+        {
+          key: 'host',
+          label: 'Host',
+          type: 'text',
+          required: true,
+          placeholder: '192.168.1.10',
+        },
+        {
+          key: 'port',
+          label: 'Port',
+          type: 'number',
+          required: true,
+          defaultValue: 502,
+          min: 1,
+          max: 65535,
+        },
+        {
+          key: 'unitId',
+          label: 'Unit ID',
+          type: 'number',
+          required: true,
+          defaultValue: 1,
+          min: 0,
+          max: 255,
+        },
+      ],
+    };
   }
 
   /**

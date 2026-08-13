@@ -17,7 +17,7 @@ The C runtime runs as a separate OS process for crash isolation. Communication b
 - Certificate export (DER/PEM download via API and Web UI)
 - Certificate health monitoring (remaining days indicator in status bar)
 - Server-side file browser for certificate/key path selection
-- Multi-protocol PLC integration (S7, Modbus TCP, EtherNet/IP, PCCC) with automatic polling, reconnection, tag discovery, and value piping to runtime
+- Multi-protocol PLC integration (S7, Modbus TCP, EtherNet/IP, PCCC) via a plugin-based connector architecture with auto-discovery, polling, reconnection, tag discovery, and value piping to runtime
 - API key or JWT authentication on mutating endpoints
 - Real-time dashboard with server status, uptime, client count, per-client session details, and system logs
 - Real-time updates via Server-Sent Events (SSE) — single multiplexed connection replaces polling for status, clients, connectors, and logs
@@ -32,4 +32,5 @@ Boolean, Int16, Int32, Int64, UInt16, UInt32, UInt64, Float, Double, String, Dat
 - The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt) applies to OPC UA client connections via the runtime, not to the REST API transport.
 - Value updates flow: Connector → IPC Bridge → stdin pipe → C runtime (real-time node value updates)
 - Supported connector protocols: S7 (nodes7), Modbus TCP (modbus-serial), EtherNet/IP (ethernet-ip with automatic tag discovery), PCCC (nodepccc for Allen-Bradley legacy PLCs)
+- Connectors use a plugin architecture — each protocol implements `ConnectorPlugin` (extending `Connector` with `getMetadata()`) and is auto-discovered at startup. New protocols require only a subdirectory with `index.ts`, no changes to core files.
 - The runtime writes `status.json` for connected client count and per-session details (app name, URI, security policy, address, connect time, state).

@@ -1,6 +1,7 @@
 import NodeS7 from 'nodes7';
 import type {
-  Connector,
+  ConnectorPlugin,
+  ConnectorMetadata,
   ConnectorType,
   ConnectionConfig,
   ConnectionStatus,
@@ -54,7 +55,7 @@ const MAX_LOG_ENTRIES = 1000;
  * On connection loss, affected node quality is set to "bad".
  * On reconnection, polling resumes and node quality is restored to "good".
  */
-export class S7Connector implements Connector {
+export class S7Connector implements ConnectorPlugin {
   private connections: Map<string, ManagedConnection> = new Map();
   private running = false;
   private valueUpdateCallback: ValueUpdateCallback | null = null;
@@ -65,6 +66,21 @@ export class S7Connector implements Connector {
   /** Returns the protocol type identifier. */
   getType(): ConnectorType {
     return 's7';
+  }
+
+  /** Returns the metadata descriptor for the S7 connector plugin. */
+  getMetadata(): ConnectorMetadata {
+    return {
+      type: 's7',
+      displayName: 'Siemens S7',
+      description: 'Connect to S7-300/400/1200/1500 PLCs via ISO-on-TCP',
+      icon: '🔌',
+      paramsSchema: [
+        { key: 'host', label: 'Host', type: 'text', required: true, placeholder: '192.168.1.10' },
+        { key: 'rack', label: 'Rack', type: 'number', required: false, defaultValue: 0, min: 0 },
+        { key: 'slot', label: 'Slot', type: 'number', required: false, defaultValue: 1, min: 0 },
+      ],
+    };
   }
 
   /**

@@ -12,10 +12,12 @@ import {
   deleteMapping,
   getConnectorValues,
   getNodes,
+  fetchProtocols,
   ConnectorConnection,
   ConnectorStatus,
   ConnectorMapping,
   ConnectorCurrentValue,
+  ConnectorMetadata,
   OpcUaNode,
 } from '../../api';
 import { Button, Badge } from '../../components';
@@ -53,6 +55,11 @@ export function ConnectorsManager(): JSX.Element {
   const { data: connections = [], isLoading } = useQuery<ConnectorConnection[]>({
     queryKey: ['connectors-connections', filter],
     queryFn: () => getConnections(filter || undefined),
+  });
+
+  const { data: protocols = [] } = useQuery<ConnectorMetadata[]>({
+    queryKey: ['connectors', 'protocols'],
+    queryFn: fetchProtocols,
   });
 
   const { data: statuses = [] } = useQuery<ConnectorStatus[]>({
@@ -201,6 +208,8 @@ export function ConnectorsManager(): JSX.Element {
       {(selectedProtocol || editingConnection) && (
         <ConnectionForm
           type={selectedProtocol ?? editingConnection!.type}
+          paramsSchema={protocols.find((p) => p.type === (selectedProtocol ?? editingConnection!.type))?.paramsSchema}
+          protocolLabel={protocols.find((p) => p.type === (selectedProtocol ?? editingConnection!.type))?.displayName}
           editingConnection={editingConnection}
           onSubmit={handleCreateOrUpdate}
           onCancel={resetForm}

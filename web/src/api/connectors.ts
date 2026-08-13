@@ -2,6 +2,32 @@ import { request } from './client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Describes a single connection parameter field for dynamic form rendering. */
+export interface ParamFieldSchema {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select';
+  required: boolean;
+  defaultValue?: string | number | boolean;
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  options?: { value: string; label: string }[];
+  pattern?: string;
+  patternMessage?: string;
+  description?: string;
+}
+
+/** Metadata descriptor for a connector protocol. */
+export interface ConnectorMetadata {
+  type: string;
+  displayName: string;
+  description?: string;
+  icon?: string;
+  version?: string;
+  paramsSchema: ParamFieldSchema[];
+}
+
 export interface ConnectorConnection {
   id: string;
   type: string;
@@ -41,6 +67,13 @@ export interface ConnectorCurrentValue {
 export interface ConnectorMappingImportResult {
   summary: { total: number; succeeded: number; failed: number };
   results: Array<{ row: number; success: boolean; deviceAddress?: string; error?: string }>;
+}
+
+// ─── Protocol Discovery ───────────────────────────────────────────────────────
+
+/** Fetch all available connector protocols with their metadata. */
+export function fetchProtocols(): Promise<ConnectorMetadata[]> {
+  return request<ConnectorMetadata[]>('/connectors/protocols');
 }
 
 // ─── Connection CRUD ──────────────────────────────────────────────────────────

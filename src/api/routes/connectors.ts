@@ -3,6 +3,7 @@ import type { ConnectorRepository, CreateConnectionRequest, CreateMappingRequest
 import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
 import type { Database } from '../../db/database.js';
 import { escapeCsvField, parseCsvLine } from '../../utils/csv.js';
+import { validateParams } from '../../connectors/params-validator.js';
 
 interface ErrorResponse {
   error: {
@@ -27,6 +28,14 @@ export function createConnectorsRouter(
   database?: Database
 ): Router {
   const router = Router();
+
+  // ─── Protocol Discovery ─────────────────────────────────────────────────────
+
+  /** GET /api/connectors/protocols - List all available protocols with metadata */
+  router.get('/protocols', (_req: Request, res: Response) => {
+    const protocols = registry?.getProtocolsMetadata() ?? [];
+    return res.json(protocols);
+  });
 
   // ─── Connection Endpoints ───────────────────────────────────────────────────
 
@@ -55,6 +64,24 @@ export function createConnectorsRouter(
         },
       };
       return res.status(400).json(errorResponse);
+    }
+
+    // Validate params against the protocol's schema (if available)
+    if (registry) {
+      const schema = registry.getParamsSchema(body.type!);
+      if (schema) {
+        const validation = validateParams(body.params as Record<string, unknown>, schema);
+        if (!validation.valid) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Invalid connection parameters',
+              details: validation.errors.map(e => ({ field: e.field, message: e.message })),
+            },
+          };
+          return res.status(400).json(errorResponse);
+        }
+      }
     }
 
     const result = repository.createConnection(body as CreateConnectionRequest);
@@ -112,6 +139,27 @@ export function createConnectorsRouter(
         },
       };
       return res.status(400).json(errorResponse);
+    }
+
+    // Validate params against schema if params are being updated
+    if (body.params && registry) {
+      const connection = repository.findConnectionById(id);
+      if (connection) {
+        const schema = registry.getParamsSchema(connection.type);
+        if (schema) {
+          const validation = validateParams(body.params, schema);
+          if (!validation.valid) {
+            const errorResponse: ErrorResponse = {
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'Invalid connection parameters',
+                details: validation.errors.map(e => ({ field: e.field, message: e.message })),
+              },
+            };
+            return res.status(400).json(errorResponse);
+          }
+        }
+      }
     }
 
     const result = repository.updateConnection(id, body);

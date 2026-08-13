@@ -1,6 +1,7 @@
 import NodePCCC from 'nodepccc';
 import type {
-  Connector,
+  ConnectorPlugin,
+  ConnectorMetadata,
   ConnectorType,
   ConnectionConfig,
   ConnectionStatus,
@@ -51,7 +52,7 @@ interface ManagedPcccConnection {
  * On connection loss, affected node quality is set to "bad".
  * On reconnection, polling resumes and node quality is restored to "good".
  */
-export class PcccConnector implements Connector {
+export class PcccConnector implements ConnectorPlugin {
   /** Regex for validating PCCC file-based addresses. */
   private static readonly PCCC_ADDRESS_REGEX = /^([A-Z]{1,2})(\d+)?:(\d+)(\/(\d+|DN|EN|TT|ACC|PRE|LEN|POS|CU|CD|OV|UN|UA))?(\.\w+)?(,\d+)?$/i;
 
@@ -64,6 +65,19 @@ export class PcccConnector implements Connector {
   /** Returns the protocol type identifier. */
   getType(): ConnectorType {
     return 'pccc';
+  }
+
+  /** Returns the metadata descriptor for the PCCC protocol. */
+  getMetadata(): ConnectorMetadata {
+    return {
+      type: 'pccc',
+      displayName: 'PCCC',
+      paramsSchema: [
+        { key: 'host', label: 'Host', type: 'text', required: true, placeholder: '192.168.1.10' },
+        { key: 'port', label: 'Port', type: 'number', required: false, defaultValue: 44818, min: 1, max: 65535 },
+        { key: 'slot', label: 'Slot', type: 'number', required: false, defaultValue: 0, min: 0 },
+      ],
+    };
   }
 
   /**

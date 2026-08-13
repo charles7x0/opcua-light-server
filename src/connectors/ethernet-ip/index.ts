@@ -2,7 +2,8 @@ import { PLC } from 'ethernet-ip';
 import type { PLCConnectOptions, TagValue } from 'ethernet-ip';
 import { TimeoutError, CIPError, ConnectionError, SessionError } from 'ethernet-ip';
 import type {
-  Connector,
+  ConnectorPlugin,
+  ConnectorMetadata,
   ConnectorType,
   ConnectionConfig,
   ConnectionStatus,
@@ -42,7 +43,7 @@ interface ManagedConnection {
  * On connection loss, affected node quality is set to "bad".
  * On reconnection, polling resumes and node quality is restored to "good".
  */
-export class EthernetIPConnector implements Connector {
+export class EthernetIPConnector implements ConnectorPlugin {
   private connections: Map<string, ManagedConnection> = new Map();
   private running = false;
   private valueUpdateCallback: ValueUpdateCallback | null = null;
@@ -52,6 +53,42 @@ export class EthernetIPConnector implements Connector {
   /** Returns the protocol type identifier. */
   getType(): ConnectorType {
     return 'ethernet-ip';
+  }
+
+  /** Returns the metadata descriptor for this connector's protocol. */
+  getMetadata(): ConnectorMetadata {
+    return {
+      type: 'ethernet-ip',
+      displayName: 'EtherNet/IP',
+      description: 'Connect to Rockwell/Allen-Bradley PLCs via EtherNet/IP (CIP)',
+      icon: '🏭',
+      paramsSchema: [
+        {
+          key: 'host',
+          label: 'Host',
+          type: 'text',
+          required: true,
+          placeholder: '192.168.1.10',
+        },
+        {
+          key: 'port',
+          label: 'Port',
+          type: 'number',
+          required: false,
+          defaultValue: 44818,
+          min: 1,
+          max: 65535,
+        },
+        {
+          key: 'slot',
+          label: 'Slot',
+          type: 'number',
+          required: false,
+          defaultValue: 0,
+          min: 0,
+        },
+      ],
+    };
   }
 
   /**

@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { ConnectorConnection } from '../../api';
-import { Button, Input, FormField, Card, CardHeader } from '../../components';
+import { ConnectorConnection, ParamFieldSchema } from '../../api';
+import { Button, Input, FormField, Card, CardHeader, Select } from '../../components';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ConnectionFormProps {
   type: string;
+  paramsSchema?: ParamFieldSchema[];
+  protocolLabel?: string;
   editingConnection?: ConnectorConnection | null;
   onSubmit: (data: {
     type: string;
@@ -24,67 +26,22 @@ interface KeyValuePair {
   value: string;
 }
 
-// ─── Protocol Field Definitions ───────────────────────────────────────────────
-
-interface FieldDef {
-  id: string;
-  label: string;
-  type: 'text' | 'number';
-  placeholder?: string;
-  min?: number;
-  defaultValue: string;
-  paramKey: string;
-}
-
-const S7_FIELDS: FieldDef[] = [
-  { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.10', defaultValue: '', paramKey: 'host' },
-  { id: 'rack', label: 'Rack', type: 'number', min: 0, defaultValue: '0', paramKey: 'rack' },
-  { id: 'slot', label: 'Slot', type: 'number', min: 0, defaultValue: '1', paramKey: 'slot' },
-];
-
-const MODBUS_FIELDS: FieldDef[] = [
-  { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.20', defaultValue: '', paramKey: 'host' },
-  { id: 'port', label: 'Port', type: 'number', min: 1, defaultValue: '502', paramKey: 'port' },
-  { id: 'unitId', label: 'Unit ID', type: 'number', min: 0, defaultValue: '1', paramKey: 'unitId' },
-];
-
-const ETHERNET_IP_FIELDS: FieldDef[] = [
-  { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.30', defaultValue: '', paramKey: 'host' },
-  { id: 'port', label: 'Port', type: 'number', min: 1, defaultValue: '44818', paramKey: 'port' },
-  { id: 'slot', label: 'CIP Slot (usually 0)', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
-];
-
-const PCCC_FIELDS: FieldDef[] = [
-  { id: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.40', defaultValue: '', paramKey: 'host' },
-  { id: 'port', label: 'Port', type: 'number', min: 1, defaultValue: '44818', paramKey: 'port' },
-  { id: 'slot', label: 'Slot', type: 'number', min: 0, defaultValue: '0', paramKey: 'slot' },
-];
-
-const PROTOCOL_FIELDS: Record<string, FieldDef[]> = {
-  's7': S7_FIELDS,
-  'modbus-tcp': MODBUS_FIELDS,
-  'ethernet-ip': ETHERNET_IP_FIELDS,
-  'pccc': PCCC_FIELDS,
-};
-
-const PROTOCOL_LABELS: Record<string, string> = {
-  's7': 'S7',
-  'modbus-tcp': 'Modbus TCP',
-  'ethernet-ip': 'EtherNet/IP',
-  'pccc': 'PCCC',
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getProtocolLabel(type: string): string {
-  return PROTOCOL_LABELS[type] ?? type;
-}
-
-function getInitialFieldValues(fields: FieldDef[], params?: Record<string, unknown>): Record<string, string> {
+function getInitialSchemaValues(
+  schema: ParamFieldSchema[],
+  params?: Record<string, unknown>
+): Record<string, string> {
   const values: Record<string, string> = {};
-  for (const field of fields) {
-    const existing = params?.[field.paramKey];
-    values[field.id] = existing !== undefined ? String(existing) : field.defaultValue;
+  for (const field of schema) {
+    const existing = params?.[field.key];
+    if (existing !== undefined) {
+      values[field.key] = String(existing);
+    } else if (field.defaultValue !== undefined) {
+      values[field.key] = String(field.defaultValue);
+    } else {
+      values[field.key] = '';
+    }
   }
   return values;
 }
@@ -96,11 +53,24 @@ function getInitialKeyValuePairs(params?: Record<string, unknown>): KeyValuePair
   return Object.entries(params).map(([key, value]) => ({ key, value: String(value) }));
 }
 
-function buildParamsFromFields(fields: FieldDef[], fieldValues: Record<string, string>): Record<string, unknown> {
+function buildParamsFromSchema(
+  schema: ParamFieldSchema[],
+  fieldValues: Record<string, string>
+): Record<string, unknown> {
   const params: Record<string, unknown> = {};
-  for (const field of fields) {
-    const raw = fieldValues[field.id] ?? field.defaultValue;
-    params[field.paramKey] = field.type === 'number' ? Number(raw) : raw;
+  for (const field of schema) {
+    const raw = fieldValues[field.key] ?? '';
+    switch (field.type) {
+      case 'number':
+        params[field.key] = raw === '' ? undefined : Number(raw);
+        break;
+      case 'boolean':
+        params[field.key] = raw === 'true';
+        break;
+      default:
+        params[field.key] = raw;
+        break;
+    }
   }
   return params;
 }
@@ -110,7 +80,6 @@ function buildParamsFromKeyValues(pairs: KeyValuePair[]): Record<string, unknown
   for (const pair of pairs) {
     const key = pair.key.trim();
     if (key) {
-      // Try to parse as number or boolean, otherwise keep as string
       const numVal = Number(pair.value);
       if (!isNaN(numVal) && pair.value.trim() !== '') {
         params[key] = numVal;
@@ -128,9 +97,16 @@ function buildParamsFromKeyValues(pairs: KeyValuePair[]): Record<string, unknown
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, isSubmitting = false }: ConnectionFormProps): JSX.Element {
-  const fields = PROTOCOL_FIELDS[type];
-  const isKnownProtocol = !!fields;
+export function ConnectionForm({
+  type,
+  paramsSchema,
+  protocolLabel,
+  editingConnection,
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+}: ConnectionFormProps): JSX.Element {
+  const hasSchema = !!paramsSchema && paramsSchema.length > 0;
 
   const [name, setName] = useState(editingConnection?.name ?? '');
   const [pollingIntervalMs, setPollingIntervalMs] = useState(
@@ -140,15 +116,15 @@ export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, is
     String(editingConnection?.reconnectIntervalMs ?? 5000)
   );
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() =>
-    isKnownProtocol ? getInitialFieldValues(fields, editingConnection?.params) : {}
+    hasSchema ? getInitialSchemaValues(paramsSchema, editingConnection?.params) : {}
   );
   const [keyValuePairs, setKeyValuePairs] = useState<KeyValuePair[]>(() =>
-    !isKnownProtocol ? getInitialKeyValuePairs(editingConnection?.params) : []
+    !hasSchema ? getInitialKeyValuePairs(editingConnection?.params) : []
   );
   const [error, setError] = useState('');
 
-  function updateFieldValue(id: string, value: string): void {
-    setFieldValues((prev) => ({ ...prev, [id]: value }));
+  function updateFieldValue(key: string, value: string): void {
+    setFieldValues((prev) => ({ ...prev, [key]: value }));
   }
 
   function updateKeyValuePair(index: number, field: 'key' | 'value', value: string): void {
@@ -169,17 +145,19 @@ export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, is
       setError('Name is required');
       return;
     }
-    if (isKnownProtocol) {
-      const hostField = fields.find((f) => f.paramKey === 'host');
-      if (hostField && !fieldValues[hostField.id]?.trim()) {
-        setError('Host is required');
+    if (hasSchema) {
+      const requiredMissing = paramsSchema.find(
+        (f) => f.required && !fieldValues[f.key]?.trim()
+      );
+      if (requiredMissing) {
+        setError(`${requiredMissing.label} is required`);
         return;
       }
     }
     setError('');
 
-    const params = isKnownProtocol
-      ? buildParamsFromFields(fields, fieldValues)
+    const params = hasSchema
+      ? buildParamsFromSchema(paramsSchema, fieldValues)
       : buildParamsFromKeyValues(keyValuePairs);
 
     onSubmit({
@@ -192,9 +170,10 @@ export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, is
     });
   }
 
+  const label = protocolLabel ?? type;
   const title = editingConnection
-    ? `Edit ${getProtocolLabel(type)} Connection`
-    : `New ${getProtocolLabel(type)} Connection`;
+    ? `Edit ${label} Connection`
+    : `New ${label} Connection`;
 
   return (
     <Card>
@@ -212,20 +191,74 @@ export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, is
             />
           </FormField>
 
-          {/* Protocol-specific fields for known types */}
-          {isKnownProtocol &&
-            fields.map((field) => (
-              <FormField key={field.id} id={`conn-${field.id}`} label={field.label}>
-                <Input
-                  id={`conn-${field.id}`}
-                  type={field.type}
-                  min={field.min}
-                  value={fieldValues[field.id] ?? field.defaultValue}
-                  onChange={(e) => updateFieldValue(field.id, e.target.value)}
-                  placeholder={field.placeholder}
-                />
-              </FormField>
-            ))}
+          {/* Schema-driven fields */}
+          {hasSchema &&
+            paramsSchema.map((field) => {
+              const fieldId = `conn-${field.key}`;
+
+              if (field.type === 'boolean') {
+                return (
+                  <FormField
+                    key={field.key}
+                    id={fieldId}
+                    label={field.label}
+                    description={field.description}
+                  >
+                    <input
+                      id={fieldId}
+                      type="checkbox"
+                      checked={fieldValues[field.key] === 'true'}
+                      onChange={(e) => updateFieldValue(field.key, String(e.target.checked))}
+                      className="mt-2 h-4 w-4 rounded border-gray-300"
+                    />
+                  </FormField>
+                );
+              }
+
+              if (field.type === 'select' && field.options) {
+                return (
+                  <FormField
+                    key={field.key}
+                    id={fieldId}
+                    label={field.label}
+                    description={field.description}
+                  >
+                    <Select
+                      id={fieldId}
+                      value={fieldValues[field.key] ?? ''}
+                      onChange={(e) => updateFieldValue(field.key, e.target.value)}
+                    >
+                      <option value="">— Select —</option>
+                      {field.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                );
+              }
+
+              // text or number
+              return (
+                <FormField
+                  key={field.key}
+                  id={fieldId}
+                  label={field.label}
+                  description={field.description}
+                >
+                  <Input
+                    id={fieldId}
+                    type={field.type}
+                    min={field.min}
+                    max={field.max}
+                    value={fieldValues[field.key] ?? ''}
+                    onChange={(e) => updateFieldValue(field.key, e.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                </FormField>
+              );
+            })}
 
           {/* Common timing fields */}
           <FormField id="conn-polling" label="Polling (ms)">
@@ -248,8 +281,8 @@ export function ConnectionForm({ type, editingConnection, onSubmit, onCancel, is
           </FormField>
         </div>
 
-        {/* Generic fallback: key-value pairs for unrecognized types */}
-        {!isKnownProtocol && (
+        {/* Generic fallback: key-value pairs for protocols without schema */}
+        {!hasSchema && (
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">Parameters</label>
             {keyValuePairs.map((pair, index) => (

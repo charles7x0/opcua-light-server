@@ -7,7 +7,7 @@ import { ConnectionForm } from '../../web/src/screens/connectors/ConnectionForm'
 import { ConnectionCard } from '../../web/src/screens/connectors/ConnectionCard';
 import { MappingTable } from '../../web/src/screens/connectors/MappingTable';
 import { ConnectorsManager } from '../../web/src/screens/connectors/ConnectorsManager';
-import type { ConnectorConnection, ConnectorMapping, ConnectorCurrentValue, ConnectorStatus } from '../../web/src/api';
+import type { ConnectorConnection, ConnectorMapping, ConnectorCurrentValue, ConnectorStatus, ParamFieldSchema } from '../../web/src/api';
 
 // Mock the API module
 vi.mock('../../web/src/api', async (importOriginal) => {
@@ -82,8 +82,26 @@ describe('ConnectionForm', () => {
     onCancel: vi.fn(),
   };
 
+  const S7_SCHEMA: ParamFieldSchema[] = [
+    { key: 'host', label: 'Host', type: 'text', required: true, placeholder: '192.168.1.10' },
+    { key: 'rack', label: 'Rack', type: 'number', required: false, defaultValue: 0, min: 0 },
+    { key: 'slot', label: 'Slot', type: 'number', required: false, defaultValue: 1, min: 0 },
+  ];
+
+  const MODBUS_SCHEMA: ParamFieldSchema[] = [
+    { key: 'host', label: 'Host', type: 'text', required: true, placeholder: '192.168.1.20' },
+    { key: 'port', label: 'Port', type: 'number', required: false, defaultValue: 502, min: 1 },
+    { key: 'unitId', label: 'Unit ID', type: 'number', required: false, defaultValue: 1, min: 0 },
+  ];
+
+  const ETHERNET_IP_SCHEMA: ParamFieldSchema[] = [
+    { key: 'host', label: 'Host', type: 'text', required: true, placeholder: '192.168.1.30' },
+    { key: 'port', label: 'Port', type: 'number', required: false, defaultValue: 44818, min: 1 },
+    { key: 'slot', label: 'CIP Slot (usually 0)', type: 'number', required: false, defaultValue: 0, min: 0 },
+  ];
+
   it('renders host, rack, slot fields for S7 type', () => {
-    render(<ConnectionForm type="s7" {...defaultProps} />);
+    render(<ConnectionForm type="s7" paramsSchema={S7_SCHEMA} {...defaultProps} />);
 
     expect(screen.getByLabelText('Host')).toBeInTheDocument();
     expect(screen.getByLabelText('Rack')).toBeInTheDocument();
@@ -91,7 +109,7 @@ describe('ConnectionForm', () => {
   });
 
   it('renders host, port, unit ID fields for modbus-tcp type', () => {
-    render(<ConnectionForm type="modbus-tcp" {...defaultProps} />);
+    render(<ConnectionForm type="modbus-tcp" paramsSchema={MODBUS_SCHEMA} {...defaultProps} />);
 
     expect(screen.getByLabelText('Host')).toBeInTheDocument();
     expect(screen.getByLabelText('Port')).toBeInTheDocument();
@@ -99,20 +117,20 @@ describe('ConnectionForm', () => {
   });
 
   it('renders host, port fields for ethernet-ip type', () => {
-    render(<ConnectionForm type="ethernet-ip" {...defaultProps} />);
+    render(<ConnectionForm type="ethernet-ip" paramsSchema={ETHERNET_IP_SCHEMA} {...defaultProps} />);
 
     expect(screen.getByLabelText('Host')).toBeInTheDocument();
     expect(screen.getByLabelText('Port')).toBeInTheDocument();
   });
 
   it('does not render S7-specific fields for modbus-tcp', () => {
-    render(<ConnectionForm type="modbus-tcp" {...defaultProps} />);
+    render(<ConnectionForm type="modbus-tcp" paramsSchema={MODBUS_SCHEMA} {...defaultProps} />);
 
     expect(screen.queryByLabelText('Rack')).not.toBeInTheDocument();
   });
 
   it('does not render modbus-specific Unit ID for S7', () => {
-    render(<ConnectionForm type="s7" {...defaultProps} />);
+    render(<ConnectionForm type="s7" paramsSchema={S7_SCHEMA} {...defaultProps} />);
 
     expect(screen.queryByLabelText('Unit ID')).not.toBeInTheDocument();
   });

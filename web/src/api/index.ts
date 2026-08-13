@@ -19,5 +19,5 @@ export type { LogEntry } from './logs';
 export { getSystemLogs } from './logs';
 export type { PkiCertificate } from './pki';
 export { getPkiCertificates, rejectPkiCertificate, trustPkiCertificate, deletePkiCertificate } from './pki';
-export type { ConnectorConnection, ConnectorMapping, ConnectorStatus, ConnectorCurrentValue, ConnectorMappingImportResult } from './connectors';
-export { getConnections, createConnection, updateConnection, deleteConnection, getMappings, createMapping, updateMapping, deleteMapping, getConnectorStatus, getConnectorValues, exportConnectorMappingsCsv, importConnectorMappingsCsv } from './connectors';
+export type { ConnectorConnection, ConnectorMapping, ConnectorStatus, ConnectorCurrentValue, ConnectorMappingImportResult, ParamFieldSchema, ConnectorMetadata } from './connectors';
+export { getConnections, createConnection, updateConnection, deleteConnection, getMappings, createMapping, updateMapping, deleteMapping, getConnectorStatus, getConnectorValues, exportConnectorMappingsCsv, importConnectorMappingsCsv, fetchProtocols } from './connectors';

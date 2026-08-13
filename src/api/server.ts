@@ -6,7 +6,9 @@
 import { Database } from '../db/database.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { ConfigGenerator } from '../config-generator/index.js';
-import { ConnectorRegistry, S7Connector, ModbusConnector, EthernetIPConnector, PcccConnector, IpcBridge } from '../connectors/index.js';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import { ConnectorRegistry, IpcBridge, loadPlugins } from '../connectors/index.js';
 import { ConnectorRepository } from '../db/repositories/connector-repository.js';
 import { NodeRepository } from '../db/repositories/node-repository.js';
 import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
@@ -60,16 +62,24 @@ async function main(): Promise<void> {
   const connectorRepo = new ConnectorRepository(database);
   const connectorRegistry = new ConnectorRegistry();
 
-  // Register all protocol connectors
-  const s7Connector = new S7Connector();
-  const modbusConnector = new ModbusConnector();
-  const ethernetIpConnector = new EthernetIPConnector();
-  const pcccConnector = new PcccConnector();
+  // Load connector plugins dynamically from built-in and optional external directories
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const builtInConnectorsDir = path.join(__dirname, '../connectors');
+  const externalPluginsDir = process.env.CONNECTOR_PLUGINS_DIR;
 
-  connectorRegistry.register(s7Connector);
-  connectorRegistry.register(modbusConnector);
-  connectorRegistry.register(ethernetIpConnector);
-  connectorRegistry.register(pcccConnector);
+  const { loaded, skipped } = await loadPlugins(builtInConnectorsDir, externalPluginsDir);
+
+  for (const plugin of loaded) {
+    connectorRegistry.register(plugin.connector, plugin.metadata);
+  }
+
+  logService.info('Server', `Loaded ${loaded.length} connector plugin(s), skipped ${skipped.length}`);
+  console.log(`Loaded ${loaded.length} connector plugin(s), skipped ${skipped.length}`);
+
+  for (const skip of skipped) {
+    logService.warn('Server', `Skipped plugin "${skip.directory}": ${skip.reason}`);
+  }
 
   // Load connections and mappings from DB into connectors
   const connections = connectorRepo.findAllConnections();
