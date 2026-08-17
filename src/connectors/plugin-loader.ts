@@ -98,6 +98,8 @@ export function validateConnectorModule(
 
 /**
  * Scan a single directory for connector plugins.
+ * Each subdirectory is checked for an entry point file: `index.js` (compiled)
+ * is preferred, with `index.ts` as a fallback for dev mode (tsx watch).
  */
 async function scanDirectory(
   dir: string,
@@ -120,15 +122,21 @@ async function scanDirectory(
 
   for (const name of entries) {
     const subDir = join(dir, name);
-    const entryPoint = join(subDir, 'index.js');
 
-    // Check if index.js exists
+    // Check for index.js (compiled) or index.ts (dev mode with tsx)
+    let entryPoint = join(subDir, 'index.js');
     try {
       await access(entryPoint);
     } catch {
-      skipped.push({ directory: name, reason: 'no entry point found' });
-      logService.debug(LOG_SOURCE, `Skipped "${name}": no entry point found`);
-      continue;
+      // Fallback to .ts for dev mode (tsx watch)
+      entryPoint = join(subDir, 'index.ts');
+      try {
+        await access(entryPoint);
+      } catch {
+        skipped.push({ directory: name, reason: 'no entry point found' });
+        logService.debug(LOG_SOURCE, `Skipped "${name}": no entry point found`);
+        continue;
+      }
     }
 
     // Dynamic import
@@ -205,6 +213,10 @@ async function scanDirectory(
 /**
  * Scan directories for connector plugins, validate exports,
  * instantiate connectors, and return load results.
+ *
+ * Entry point resolution order per plugin subdirectory:
+ * 1. `index.js` (compiled output — production)
+ * 2. `index.ts` (source — dev mode with tsx)
  *
  * @param builtInDir - Path to built-in connectors (src/connectors/)
  * @param externalDir - Optional path from CONNECTOR_PLUGINS_DIR env var

@@ -207,6 +207,7 @@ export function ConnectorsManager(): JSX.Element {
       )}
       {(selectedProtocol || editingConnection) && (
         <ConnectionForm
+          key={editingConnection?.id ?? selectedProtocol ?? 'new'}
           type={selectedProtocol ?? editingConnection!.type}
           paramsSchema={protocols.find((p) => p.type === (selectedProtocol ?? editingConnection!.type))?.paramsSchema}
           protocolLabel={protocols.find((p) => p.type === (selectedProtocol ?? editingConnection!.type))?.displayName}
