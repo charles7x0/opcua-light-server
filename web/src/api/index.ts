@@ -13,8 +13,6 @@ export type { OpcUaNode, CsvImportResult } from './nodes';
 export { getNodes, getNode, createNode, updateNode, deleteNode, exportNodesCsv, importNodesCsv } from './nodes';
 export type { SecurityConfig, GenerateCertificateOptions } from './security';
 export { getSecurityConfig, updateSecurityPolicy, uploadCertificate, generateCertificate, getCertificateDownloadUrl, browseFiles } from './security';
-export type { S7Connection, S7MappingItem, S7ConnectionStatus, S7CurrentValue, S7MappingImportResult, S7LogEntry } from './s7';
-export { getS7Connections, createS7Connection, updateS7Connection, deleteS7Connection, getS7Mappings, createS7Mapping, updateS7Mapping, createS7MappingsBulk, deleteS7Mapping, getS7Status, getS7Values, exportS7MappingsCsv, importS7MappingsCsv, getS7Logs } from './s7';
 export type { LogEntry } from './logs';
 export { getSystemLogs } from './logs';
 export type { PkiCertificate } from './pki';
