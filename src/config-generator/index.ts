@@ -1,8 +1,6 @@
 import { existsSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import type { Database } from '../db/database.js';
-import type { NamespaceRepository } from '../db/repositories/namespace-repository.js';
-import type { NodeRepository } from '../db/repositories/node-repository.js';
 import type {
   AddressSpaceConfig,
   SecurityConfigOutput,
@@ -61,8 +59,6 @@ interface ConnectorMappingRow {
 export class ConfigGenerator {
   constructor(
     private readonly database: Database,
-    private readonly namespaceRepo?: NamespaceRepository,
-    private readonly nodeRepo?: NodeRepository,
   ) {}
 
   /**

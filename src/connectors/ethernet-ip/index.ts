@@ -2,35 +2,22 @@ import { PLC } from 'ethernet-ip';
 import type { PLCConnectOptions, TagValue } from 'ethernet-ip';
 import { TimeoutError, CIPError, ConnectionError, SessionError } from 'ethernet-ip';
 import type {
-  ConnectorPlugin,
   ConnectorMetadata,
   ConnectorType,
   ConnectionConfig,
-  ConnectionStatus,
-  CurrentValue,
   Mapping,
   ValueUpdate,
-  ValueUpdateCallback,
 } from '../types.js';
-import { logService } from '../../log/index.js';
+import { BaseConnector, type BaseManagedConnection } from '../base-connector.js';
 
 /**
  * Represents a single managed EtherNet/IP connection with its polling state.
  */
-interface ManagedConnection {
-  config: ConnectionConfig;
+interface ManagedEipConnection extends BaseManagedConnection<PLC> {
   host: string;
   port: number;
   slot: number;
-  plc: PLC | null;
-  state: ConnectionStatus['state'];
-  lastPollAt?: Date;
-  errorMessage?: string;
-  pollingTimer: ReturnType<typeof setInterval> | null;
-  reconnectTimer: ReturnType<typeof setTimeout> | null;
   pollInProgress: boolean;
-  mappings: Map<string, Mapping>;
-  connecting: boolean;
 }
 
 /**
@@ -43,13 +30,7 @@ interface ManagedConnection {
  * On connection loss, affected node quality is set to "bad".
  * On reconnection, polling resumes and node quality is restored to "good".
  */
-export class EthernetIPConnector implements ConnectorPlugin {
-  private connections: Map<string, ManagedConnection> = new Map();
-  private running = false;
-  private valueUpdateCallback: ValueUpdateCallback | null = null;
-  /** In-memory cache of the last-read value per mapping ID. */
-  private currentValues: Map<string, CurrentValue> = new Map();
-
+export class EthernetIPConnector extends BaseConnector<PLC, ManagedEipConnection> {
   /** Returns the protocol type identifier. */
   getType(): ConnectorType {
     return 'ethernet-ip';
@@ -92,169 +73,9 @@ export class EthernetIPConnector implements ConnectorPlugin {
   }
 
   /**
-   * Register a callback to receive value updates from EtherNet/IP polling.
-   * The callback is invoked with batched updates after each poll cycle.
-   */
-  onValueUpdate(callback: ValueUpdateCallback): void {
-    this.valueUpdateCallback = callback;
-  }
-
-  /**
-   * Add a new EtherNet/IP connection configuration.
-   * Extracts host, port, slot from config.params.
-   * If the connector is already running, the connection will be initiated immediately.
-   */
-  addConnection(config: ConnectionConfig): void {
-    if (this.connections.has(config.id)) {
-      throw new Error(`Connection with id '${config.id}' already exists`);
-    }
-
-    const { host, port, slot } = this.extractParams(config);
-
-    const managed: ManagedConnection = {
-      config,
-      host,
-      port,
-      slot,
-      plc: null,
-      state: 'disconnected',
-      pollingTimer: null,
-      reconnectTimer: null,
-      pollInProgress: false,
-      mappings: new Map(),
-      connecting: false,
-    };
-
-    this.connections.set(config.id, managed);
-
-    if (this.running && config.enabled) {
-      this.initiateConnection(managed);
-    }
-  }
-
-  /**
-   * Remove an EtherNet/IP connection and clean up all associated resources.
-   */
-  removeConnection(id: string): void {
-    const managed = this.connections.get(id);
-    if (!managed) {
-      throw new Error(`Connection with id '${id}' not found`);
-    }
-
-    this.disconnectAndCleanup(managed);
-    this.connections.delete(id);
-  }
-
-  /**
-   * Update an existing EtherNet/IP connection configuration.
-   * Disconnects the current connection and reconnects with the new config.
-   */
-  updateConnection(config: ConnectionConfig): void {
-    const managed = this.connections.get(config.id);
-    if (!managed) {
-      this.addConnection(config);
-      return;
-    }
-
-    this.disconnectAndCleanup(managed);
-
-    const { host, port, slot } = this.extractParams(config);
-    managed.config = config;
-    managed.host = host;
-    managed.port = port;
-    managed.slot = slot;
-
-    if (this.running && config.enabled) {
-      this.initiateConnection(managed);
-    }
-  }
-
-  /**
-   * Add a variable mapping between a CIP tag name and an OPC UA node.
-   */
-  addMapping(mapping: Mapping): void {
-    const managed = this.connections.get(mapping.connectionId);
-    if (!managed) {
-      throw new Error(`Connection with id '${mapping.connectionId}' not found`);
-    }
-
-    managed.mappings.set(mapping.id, mapping);
-  }
-
-  /**
-   * Remove a variable mapping.
-   */
-  removeMapping(id: string): void {
-    for (const managed of this.connections.values()) {
-      const mapping = managed.mappings.get(id);
-      if (mapping) {
-        managed.mappings.delete(id);
-        this.currentValues.delete(id);
-        return;
-      }
-    }
-    throw new Error(`Mapping with id '${id}' not found`);
-  }
-
-  /**
-   * Get the last-read values for all mapped variables across all connections.
-   */
-  getCurrentValues(): CurrentValue[] {
-    return Array.from(this.currentValues.values());
-  }
-
-  /**
-   * Get the current status of all managed connections.
-   */
-  getStatus(): ConnectionStatus[] {
-    const statuses: ConnectionStatus[] = [];
-    for (const managed of this.connections.values()) {
-      const status: ConnectionStatus = {
-        connectionId: managed.config.id,
-        state: managed.state,
-      };
-      if (managed.lastPollAt) {
-        status.lastPollAt = managed.lastPollAt.toISOString();
-      }
-      if (managed.errorMessage) {
-        status.errorMessage = managed.errorMessage;
-      }
-      statuses.push(status);
-    }
-    return statuses;
-  }
-
-  /**
-   * Start the EtherNet/IP connector. Initiates connections to all enabled devices
-   * and begins polling CIP tags.
-   */
-  start(): void {
-    if (this.running) return;
-    this.running = true;
-
-    for (const managed of this.connections.values()) {
-      if (managed.config.enabled) {
-        this.initiateConnection(managed);
-      }
-    }
-  }
-
-  /**
-   * Stop the EtherNet/IP connector. Disconnects from all devices and stops polling.
-   */
-  stop(): void {
-    if (!this.running) return;
-    this.running = false;
-
-    for (const managed of this.connections.values()) {
-      this.disconnectAndCleanup(managed);
-    }
-  }
-
-  /**
    * Extract EtherNet/IP-specific params (host, port, slot) from the generic ConnectionConfig.
    */
-  private extractParams(config: ConnectionConfig): { host: string; port: number; slot: number } {
+  protected extractParams(config: ConnectionConfig): { host: string; port: number; slot: number } {
     const params = config.params;
     const host = params.host as string;
     const port = (params.port as number) ?? 44818;
@@ -268,18 +89,54 @@ export class EthernetIPConnector implements ConnectorPlugin {
   }
 
   /**
-   * Initiate a connection to an EtherNet/IP device.
-   * After connecting, performs tag discovery so the library learns data types
-   * for subsequent read/write operations. Discovery failures are logged as
-   * warnings but do not prevent polling — reads may still succeed for
-   * explicitly typed tags.
+   * Create a managed EtherNet/IP connection object.
    */
-  private initiateConnection(managed: ManagedConnection): void {
+  protected createManagedConnection(config: ConnectionConfig, params: Record<string, unknown>): ManagedEipConnection {
+    return {
+      config,
+      host: params.host as string,
+      port: params.port as number,
+      slot: params.slot as number,
+      client: null,
+      state: 'disconnected',
+      pollingTimer: null,
+      reconnectTimer: null,
+      pollInProgress: false,
+      mappings: new Map(),
+      connecting: false,
+    };
+  }
+
+  /**
+   * Apply extracted params to the managed connection (used by updateConnection).
+   */
+  protected applyParams(managed: ManagedEipConnection, params: Record<string, unknown>): void {
+    managed.host = params.host as string;
+    managed.port = params.port as number;
+    managed.slot = params.slot as number;
+  }
+
+  /**
+   * Add a variable mapping between a CIP tag name and an OPC UA node.
+   */
+  override addMapping(mapping: Mapping): void {
+    const managed = this.connections.get(mapping.connectionId);
+    if (!managed) {
+      throw new Error(`Connection with id '${mapping.connectionId}' not found`);
+    }
+
+    managed.mappings.set(mapping.id, mapping);
+  }
+
+  /**
+   * Initiate a connection to an EtherNet/IP device.
+   */
+  initiateConnection(managed: ManagedEipConnection): void {
     if (managed.connecting) return;
     managed.connecting = true;
 
     const plc = this.createPLC();
-    managed.plc = plc;
+    managed.client = plc;
 
     this.log('info', managed.config.name, `Connecting to ${managed.host}:${managed.port} slot ${managed.slot}...`);
 
@@ -296,7 +153,7 @@ export class EthernetIPConnector implements ConnectorPlugin {
         managed.connecting = false;
 
         // Guard: plc may have been nullified by disconnectAndCleanup
-        if (!managed.plc) {
+        if (!managed.client) {
           this.log('warn', managed.config.name, 'Connection succeeded but PLC was already cleaned up — ignoring');
           return;
         }
@@ -306,10 +163,7 @@ export class EthernetIPConnector implements ConnectorPlugin {
 
         this.log('info', managed.config.name, 'Connected successfully');
 
-        // Notify that nodes are now good quality
         this.emitQualityUpdate(managed, 'good');
-
-        // Start polling
         this.startPolling(managed);
       })
       .catch((err: unknown) => {
@@ -319,53 +173,34 @@ export class EthernetIPConnector implements ConnectorPlugin {
   }
 
   /**
-   * Handle a connection error or disconnection event.
-   * Sets affected node quality to "bad" and schedules reconnection.
-   */
-  private handleConnectionError(managed: ManagedConnection, err: unknown): void {
-    const wasConnected = managed.state === 'connected';
-    managed.state = wasConnected ? 'disconnected' : 'error';
-    managed.errorMessage =
-      typeof err === 'string' ? err : (err as Error)?.message || 'Connection failed';
-
-    this.log('error', managed.config.name, managed.errorMessage!);
-
-    // Stop polling if it was active
-    this.stopPolling(managed);
-
-    // Set affected node quality to "bad"
-    this.emitQualityUpdate(managed, 'bad');
-
-    // Schedule reconnection if we're still running
-    if (this.running) {
-      this.scheduleReconnect(managed);
-    }
-  }
-
-  /**
    * Start polling CIP tags at the configured interval.
    */
-  private startPolling(managed: ManagedConnection): void {
+  startPolling(managed: ManagedEipConnection): void {
     if (managed.pollingTimer) return;
 
     const poll = (): void => {
-      if (managed.state !== 'connected' || !managed.plc) return;
+      if (managed.state !== 'connected' || !managed.client) return;
       if (managed.mappings.size === 0) return;
-      if (managed.pollInProgress) return; // Skip if previous poll still running
+      if (managed.pollInProgress) return;
 
       this.pollTags(managed);
     };
 
-    // Perform initial poll
     poll();
-
-    // Set up interval polling
     managed.pollingTimer = setInterval(poll, managed.config.pollingIntervalMs);
   }
 
   /**
+   * Close the EtherNet/IP PLC connection.
+   */
+  closeClient(managed: ManagedEipConnection): void {
+    if (managed.client) {
+      managed.client.disconnect().catch(() => {});
+    }
+  }
+
+  /**
    * Poll all mapped CIP tags for a connection.
-   * Reads tags using PLC.read() (single or batch depending on count).
    *
    * Error handling strategy:
    * - ConnectionError / SessionError → triggers full reconnection cycle
@@ -373,18 +208,17 @@ export class EthernetIPConnector implements ConnectorPlugin {
    *   but keeps the connection alive (no reconnect), so the next poll can recover
    * - Socket-level errors (ECONNRESET, EPIPE, etc.) → triggers reconnection
    */
-  private pollTags(managed: ManagedConnection): void {
-    if (!managed.plc) return;
+  private pollTags(managed: ManagedEipConnection): void {
+    if (!managed.client) return;
 
     managed.pollInProgress = true;
 
     const mappings = Array.from(managed.mappings.values());
     const tagNames = mappings.map((m) => m.deviceAddress);
 
-    // Use batch read when multiple tags exist
     const readPromise = tagNames.length === 1
-      ? managed.plc.read(tagNames[0]).then((val) => [val])
-      : managed.plc.read(tagNames);
+      ? managed.client.read(tagNames[0]).then((val) => [val])
+      : managed.client.read(tagNames);
 
     readPromise
       .then((values: TagValue[]) => {
@@ -396,7 +230,6 @@ export class EthernetIPConnector implements ConnectorPlugin {
           const value = values[i];
           if (value !== undefined) {
             const now = new Date();
-            // Only emit to runtime if mapping has a nodeId
             if (mapping.nodeId) {
               updates.push({
                 nodeId: mapping.nodeId,
@@ -405,8 +238,7 @@ export class EthernetIPConnector implements ConnectorPlugin {
                 timestamp: now,
               });
             }
-            // Always cache for the live values API
-            this.currentValues.set(mapping.id, {
+            this.cacheValue(mapping.id, {
               nodeId: mapping.nodeId,
               deviceAddress: mapping.deviceAddress,
               connectionId: managed.config.id,
@@ -424,9 +256,7 @@ export class EthernetIPConnector implements ConnectorPlugin {
             return `${addr}=${JSON.stringify(u.value)}`;
           }).join(', ');
           this.log('debug', managed.config.name, `Read ${updates.length} tag(s): ${valuesSummary}`);
-          if (this.valueUpdateCallback) {
-            this.valueUpdateCallback(updates);
-          }
+          this.emitValueUpdates(updates);
         }
 
         managed.pollInProgress = false;
@@ -434,18 +264,14 @@ export class EthernetIPConnector implements ConnectorPlugin {
       .catch((err: unknown) => {
         managed.pollInProgress = false;
         if (err instanceof ConnectionError || err instanceof SessionError) {
-          // Actual connection loss — reconnect
           this.handleConnectionError(managed, err);
         } else if (err instanceof TimeoutError) {
-          // Read timeout — log and mark quality bad, but don't reconnect
           this.log('warn', managed.config.name, `Read timeout: ${(err as Error).message}`);
           this.emitQualityUpdate(managed, 'bad');
         } else if (err instanceof CIPError) {
-          // CIP protocol error (tag not found, path error, etc.) — log and mark bad
           this.log('warn', managed.config.name, `CIP error reading tags: ${(err as Error).message}`);
           this.emitQualityUpdate(managed, 'bad');
         } else {
-          // Unknown error — check if socket is dead
           const msg = (err as Error)?.message ?? 'Unknown error';
           if (msg.includes('ECONNRESET') || msg.includes('EPIPE') || msg.includes('socket') || msg.includes('Not connected') || msg.includes('Connection lost')) {
             this.handleConnectionError(managed, err);
@@ -472,117 +298,10 @@ export class EthernetIPConnector implements ConnectorPlugin {
   }
 
   /**
-   * Stop the polling timer for a connection.
-   */
-  private stopPolling(managed: ManagedConnection): void {
-    if (managed.pollingTimer) {
-      clearInterval(managed.pollingTimer);
-      managed.pollingTimer = null;
-    }
-  }
-
-  /**
-   * Schedule a reconnection attempt after the configured interval.
-   */
-  private scheduleReconnect(managed: ManagedConnection): void {
-    if (managed.reconnectTimer) {
-      clearTimeout(managed.reconnectTimer);
-      managed.reconnectTimer = null;
-    }
-
-    this.log('warn', managed.config.name, `Reconnecting in ${managed.config.reconnectIntervalMs}ms...`);
-
-    managed.reconnectTimer = setTimeout(() => {
-      managed.reconnectTimer = null;
-
-      if (!this.running) return;
-
-      // Clean up old PLC before reconnecting
-      if (managed.plc) {
-        managed.plc.disconnect().catch(() => {});
-        managed.plc = null;
-      }
-
-      managed.state = 'disconnected';
-      this.initiateConnection(managed);
-    }, managed.config.reconnectIntervalMs);
-  }
-
-  /**
-   * Emit quality updates for all nodes mapped to a connection.
-   * Used when connection state changes (connected → good, disconnected → bad).
-   */
-  private emitQualityUpdate(managed: ManagedConnection, quality: 'good' | 'bad'): void {
-    // Update cached values quality
-    for (const mapping of managed.mappings.values()) {
-      const cached = this.currentValues.get(mapping.id);
-      if (cached) {
-        cached.quality = quality;
-        cached.timestamp = new Date().toISOString();
-      } else if (quality === 'bad') {
-        this.currentValues.set(mapping.id, {
-          nodeId: mapping.nodeId,
-          deviceAddress: mapping.deviceAddress,
-          connectionId: managed.config.id,
-          value: undefined,
-          quality: 'bad',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    }
-
-    if (!this.valueUpdateCallback) return;
-    if (managed.mappings.size === 0) return;
-
-    const updates: ValueUpdate[] = [];
-    for (const mapping of managed.mappings.values()) {
-      if (!mapping.nodeId) continue;
-      updates.push({
-        nodeId: mapping.nodeId,
-        value: undefined,
-        quality,
-        timestamp: new Date(),
-      });
-    }
-
-    if (updates.length > 0) {
-      this.valueUpdateCallback(updates);
-    }
-  }
-
-  /**
-   * Disconnect from an EtherNet/IP device and clean up all timers and resources.
-   */
-  private disconnectAndCleanup(managed: ManagedConnection): void {
-    this.stopPolling(managed);
-
-    if (managed.reconnectTimer) {
-      clearTimeout(managed.reconnectTimer);
-      managed.reconnectTimer = null;
-    }
-
-    if (managed.plc) {
-      managed.plc.disconnect().catch(() => {});
-      managed.plc = null;
-    }
-
-    managed.state = 'disconnected';
-    managed.connecting = false;
-    managed.errorMessage = undefined;
-  }
-
-  /**
    * Create a new ethernet-ip PLC instance.
    * Separated into its own method to allow mocking in tests.
    */
   protected createPLC(): PLC {
     return new PLC();
-  }
-
-  /**
-   * Log a message to the central log service.
-   */
-  private log(level: 'info' | 'warn' | 'error' | 'debug', connectionName: string, message: string): void {
-    logService.log(level, `EthernetIP:${connectionName}`, message);
   }
 }

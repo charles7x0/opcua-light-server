@@ -10,8 +10,6 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { ConnectorRegistry, IpcBridge, loadPlugins } from '../connectors/index.js';
 import { ConnectorRepository } from '../db/repositories/connector-repository.js';
-import { NodeRepository } from '../db/repositories/node-repository.js';
-import { NamespaceRepository } from '../db/repositories/namespace-repository.js';
 import { TofuManager } from '../tofu-manager/index.js';
 import { loadAuthConfig } from '../auth/config.js';
 import { createApp } from './app.js';
@@ -50,9 +48,7 @@ async function main(): Promise<void> {
 
   // ─── Create Dependencies ────────────────────────────────────────────────────
   const processManager = new ProcessManager(runtimePath, configPath);
-  const nodeRepo = new NodeRepository(database);
-  const namespaceRepo = new NamespaceRepository(database);
-  const configGenerator = new ConfigGenerator(database, namespaceRepo, nodeRepo);
+  const configGenerator = new ConfigGenerator(database);
   const authConfig = loadAuthConfig();
 
   // ─── Initialize TOFU Manager ────────────────────────────────────────────────
