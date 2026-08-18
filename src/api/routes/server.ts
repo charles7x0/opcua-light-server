@@ -6,7 +6,7 @@
 import { Router, type Request, type Response } from 'express';
 import type { ProcessManager } from '../../process-manager/index.js';
 import type { ConfigGenerator } from '../../config-generator/index.js';
-import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../../connectors/core/connector-registry.js';
 import type { ErrorResponse, StartServerResponse, SuccessResponse } from '../../types/api.js';
 import { logService } from '../../log/index.js';
 

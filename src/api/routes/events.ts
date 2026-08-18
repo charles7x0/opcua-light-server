@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import type { SseHub } from '../sse-hub.js';
 import type { ProcessManager } from '../../process-manager/index.js';
-import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../../connectors/core/connector-registry.js';
 
 /** Options for creating the events router. */
 export interface EventsRouterOptions {

@@ -5,7 +5,7 @@
  */
 
 import type NodeS7 from 'nodes7';
-import type { ConnectionConfig, ConnectionStatus, Mapping } from '../types.js';
+import type { ConnectionConfig, ConnectionStatus, Mapping } from '../../core/types.js';
 
 /** Type alias for a nodes7 client instance. */
 export type NodeS7Instance = InstanceType<typeof NodeS7>;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { validateParams } from '../../src/connectors/params-validator.js';
-import { ParamFieldSchema } from '../../src/connectors/types.js';
+import { validateParams } from '../../src/connectors/core/params-validator.js';
+import { ParamFieldSchema } from '../../src/connectors/core/types.js';
 
 describe('validateParams', () => {
   describe('text fields', () => {

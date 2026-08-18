@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
+import { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
 import type {
   Connector,
   ConnectorType,
@@ -9,7 +9,7 @@ import type {
   CurrentValue,
   Mapping,
   ValueUpdateCallback,
-} from '../../src/connectors/types.js';
+} from '../../src/connectors/core/types.js';
 
 /** Minimal mock connector for testing registry metadata methods. */
 function createMockConnector(type: ConnectorType): Connector {

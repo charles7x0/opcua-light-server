@@ -4,7 +4,7 @@
  * they are implementation details of the Modbus connector.
  */
 
-import type { ConnectionConfig, ConnectionStatus, Mapping } from '../types.js';
+import type { ConnectionConfig, ConnectionStatus, Mapping } from '../../core/types.js';
 
 /** Modbus function code address types. */
 export type ModbusAddressType = 'HR' | 'IR' | 'CO' | 'DI';

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { ConnectorRepository, CreateConnectionRequest, CreateMappingRequest } from '../../db/repositories/connector-repository.js';
-import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
-import type { ConnectionConfig, Mapping } from '../../connectors/types.js';
+import type { ConnectorRegistry } from '../../connectors/core/connector-registry.js';
+import type { ConnectionConfig, Mapping } from '../../connectors/core/types.js';
 import type { Database } from '../../db/database.js';
 import { escapeCsvField, parseCsvLine } from '../../utils/csv.js';
 

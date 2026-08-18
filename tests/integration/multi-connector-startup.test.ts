@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'crypto';
 import { Database } from '../../src/db/database.js';
 import { ConnectorRepository } from '../../src/db/repositories/connector-repository.js';
-import { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
-import { S7Connector } from '../../src/connectors/s7/index.js';
-import { ModbusConnector } from '../../src/connectors/modbus-tcp/index.js';
-import { EthernetIPConnector } from '../../src/connectors/ethernet-ip/index.js';
-import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
+import { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
+import { S7Connector } from '../../src/connectors/protocols/s7/index.js';
+import { ModbusConnector } from '../../src/connectors/protocols/modbus-tcp/index.js';
+import { EthernetIPConnector } from '../../src/connectors/protocols/ethernet-ip/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Integration tests for multi-connector startup.

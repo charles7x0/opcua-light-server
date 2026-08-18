@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { validateParams } from '../../src/connectors/params-validator.js';
-import type { ParamFieldSchema } from '../../src/connectors/types.js';
+import { validateParams } from '../../src/connectors/core/params-validator.js';
+import type { ParamFieldSchema } from '../../src/connectors/core/types.js';
 
 /**
  * Feature: connector-plugin-architecture

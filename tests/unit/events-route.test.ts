@@ -3,7 +3,7 @@ import { createEventsRouter } from '../../src/api/routes/events.js';
 import type { Request, Response } from 'express';
 import type { SseHub } from '../../src/api/sse-hub.js';
 import type { ProcessManager } from '../../src/process-manager/index.js';
-import type { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
 
 /** Creates a mock Express Request with event emitter capabilities. */
 function createMockRequest(): Request {

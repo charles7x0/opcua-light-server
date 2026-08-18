@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
-import { PcccConnector } from '../../src/connectors/pccc/index.js';
-import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
+import { PcccConnector } from '../../src/connectors/protocols/pccc/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Mock nodepccc PLC instance for property testing.

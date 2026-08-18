@@ -5,8 +5,8 @@ import type {
   ConnectionConfig,
   Mapping,
   ValueUpdate,
-} from '../types.js';
-import { BaseConnector, type BaseManagedConnection } from '../base-connector.js';
+} from '../../core/types.js';
+import { BaseConnector, type BaseManagedConnection } from '../../core/base-connector.js';
 
 /** Type alias for a nodes7 client instance. */
 type NodeS7Instance = InstanceType<typeof NodeS7>;

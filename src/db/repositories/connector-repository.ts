@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database.js';
-import type { ConnectionConfig, ConnectorType, Mapping } from '../../connectors/types.js';
+import type { ConnectionConfig, ConnectorType, Mapping } from '../../connectors/core/types.js';
 
 /** Result type for repository operations that can fail with a domain error. */
 export type Result<T> =

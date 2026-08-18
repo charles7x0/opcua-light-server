@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EthernetIPConnector } from '../../src/connectors/ethernet-ip/index.js';
-import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
+import { EthernetIPConnector } from '../../src/connectors/protocols/ethernet-ip/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Mock PLC instance matching the ethernet-ip PLC interface.

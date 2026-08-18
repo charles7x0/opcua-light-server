@@ -2,7 +2,7 @@ import { readdir, stat, access } from 'fs/promises';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 
-import { logService } from '../log/index.js';
+import { logService } from '../../log/index.js';
 import { Connector, ConnectorType, ConnectorMetadata } from './types.js';
 
 const LOG_SOURCE = 'PluginLoader';

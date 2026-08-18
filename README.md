@@ -284,7 +284,7 @@ A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On
 
 Supported protocol types: `s7`, `modbus-tcp`, `ethernet-ip`, `pccc`
 
-**Plugin architecture:** Connectors are discovered automatically at startup from `src/connectors/`. Each connector implements the `ConnectorPlugin` interface (extending `Connector` with `getMetadata()`) and exposes a `ParamFieldSchema[]` describing its connection parameters. The frontend fetches this schema via `GET /api/connectors/protocols` to render dynamic forms. New protocols can be added by creating a subdirectory with an `index.ts` exporting a `ConnectorPlugin` class — no changes to core files required.
+**Plugin architecture:** Connectors are discovered automatically at startup from `src/connectors/`. Each connector extends the `BaseConnector<TClient, TManaged>` abstract class (which implements `ConnectorPlugin`) and only needs to provide protocol-specific logic: connection initiation, polling, and client cleanup. The base class handles all shared boilerplate — connection lifecycle, reconnection scheduling, quality updates, value caching, and timer management. Each plugin exposes a `ParamFieldSchema[]` describing its connection parameters. The frontend fetches this schema via `GET /api/connectors/protocols` to render dynamic forms. New protocols can be added by creating a subdirectory with an `index.ts` exporting a class that extends `BaseConnector` — no changes to core files required.
 
 **EtherNet/IP notes:** After connecting to a Rockwell PLC, the connector performs automatic tag discovery so the library learns data types for subsequent read/write operations. Discovery failures are non-fatal — polling will still attempt reads. Transient poll errors (read timeouts, CIP protocol errors) mark affected node quality as "bad" without triggering a full reconnection, allowing the next poll cycle to recover automatically.
 
@@ -315,6 +315,7 @@ opcua-light-server/
 │   │   ├── modbus-tcp/      # Modbus TCP (modbus-serial)
 │   │   ├── ethernet-ip/     # EtherNet/IP (ethernet-ip, with tag discovery)
 │   │   ├── pccc/            # Allen-Bradley PCCC (nodepccc)
+│   │   ├── base-connector.ts # Abstract base class (lifecycle, polling, reconnection, caching)
 │   │   ├── connector-registry.ts
 │   │   ├── ipc-bridge.ts    # Bridges value updates to runtime via stdin
 │   │   ├── params-validator.ts  # Validates connection params against plugin schema

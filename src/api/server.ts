@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   // Load connector plugins dynamically from built-in and optional external directories
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const builtInConnectorsDir = path.join(__dirname, '../connectors');
+  const builtInConnectorsDir = path.join(__dirname, '../connectors/protocols');
   const externalPluginsDir = process.env.CONNECTOR_PLUGINS_DIR;
 
   const { loaded, skipped } = await loadPlugins(builtInConnectorsDir, externalPluginsDir);

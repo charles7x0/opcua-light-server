@@ -5,8 +5,8 @@ import type {
   ConnectionConfig,
   Mapping,
   ValueUpdate,
-} from '../types.js';
-import { BaseConnector, type BaseManagedConnection } from '../base-connector.js';
+} from '../../core/types.js';
+import { BaseConnector, type BaseManagedConnection } from '../../core/base-connector.js';
 
 /** Type alias for a modbus-serial client instance. */
 type ModbusClient = InstanceType<typeof ModbusRTU>;

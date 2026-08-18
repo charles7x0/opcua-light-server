@@ -32,5 +32,5 @@ Boolean, Int16, Int32, Int64, UInt16, UInt32, UInt64, Float, Double, String, Dat
 - The Control API always uses plain HTTP. The OPC UA security mode (None/Sign/SignAndEncrypt) applies to OPC UA client connections via the runtime, not to the REST API transport.
 - Value updates flow: Connector → IPC Bridge → stdin pipe → C runtime (real-time node value updates)
 - Supported connector protocols: S7 (nodes7), Modbus TCP (modbus-serial), EtherNet/IP (ethernet-ip with automatic tag discovery), PCCC (nodepccc for Allen-Bradley legacy PLCs)
-- Connectors use a plugin architecture — each protocol implements `ConnectorPlugin` (extending `Connector` with `getMetadata()`) and is auto-discovered at startup. New protocols require only a subdirectory with `index.ts`, no changes to core files.
+- Connectors use a plugin architecture — each protocol extends `BaseConnector<TClient, TManaged>` (which implements `ConnectorPlugin`) and only provides protocol-specific logic (connection, polling, cleanup). The base class handles lifecycle, reconnection, quality updates, and value caching. Plugins are auto-discovered at startup. New protocols require only a subdirectory with `index.ts`, no changes to core files.
 - The runtime writes `status.json` for connected client count and per-session details (app name, URI, security policy, address, connect time, state).

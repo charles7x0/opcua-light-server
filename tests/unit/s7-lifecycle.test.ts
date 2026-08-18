@@ -8,7 +8,7 @@ import express from 'express';
 import { createServerRouter } from '../../src/api/routes/server.js';
 import type { ProcessManager } from '../../src/process-manager/index.js';
 import type { ConfigGenerator } from '../../src/config-generator/index.js';
-import type { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
 
 function createMockProcessManager(): ProcessManager {
   return {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { S7Connector } from '../../src/connectors/s7/index.js';
-import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
+import { S7Connector } from '../../src/connectors/protocols/s7/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Mock nodes7 client instance.

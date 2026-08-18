@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import type { ConnectorRepository, CreateConnectionRequest, CreateMappingRequest } from '../../db/repositories/connector-repository.js';
-import type { ConnectorRegistry } from '../../connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../../connectors/core/connector-registry.js';
 import type { Database } from '../../db/database.js';
 import { escapeCsvField, parseCsvLine } from '../../utils/csv.js';
-import { validateParams } from '../../connectors/params-validator.js';
+import { validateParams } from '../../connectors/core/params-validator.js';
 
 interface ErrorResponse {
   error: {

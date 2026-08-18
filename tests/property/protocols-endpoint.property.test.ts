@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 
-import { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
-import type { Connector, ConnectorMetadata, ParamFieldSchema, ConnectorType, ConnectionConfig, Mapping, ConnectionStatus, CurrentValue, ValueUpdate, ValueUpdateCallback } from '../../src/connectors/types.js';
+import { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
+import type { Connector, ConnectorMetadata, ParamFieldSchema, ConnectorType, ConnectionConfig, Mapping, ConnectionStatus, CurrentValue, ValueUpdate, ValueUpdateCallback } from '../../src/connectors/core/types.js';
 
 /**
  * Feature: connector-plugin-architecture

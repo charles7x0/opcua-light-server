@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { loadPlugins, validateConnectorModule } from '../../src/connectors/plugin-loader.js';
+import { loadPlugins, validateConnectorModule } from '../../src/connectors/core/plugin-loader.js';
 
 /**
  * Feature: connector-plugin-architecture

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Database } from '../../src/db/database.js';
 import { S7Repository } from '../../src/db/repositories/s7-repository.js';
-import { S7Connector } from '../../src/connectors/s7/index.js';
-import type { ConnectionConfig, Mapping } from '../../src/connectors/types.js';
+import { S7Connector } from '../../src/connectors/protocols/s7/index.js';
+import type { ConnectionConfig, Mapping } from '../../src/connectors/core/types.js';
 import { ConfigGenerator } from '../../src/config-generator/index.js';
 
 describe('S7 Mapping Lifecycle', () => {

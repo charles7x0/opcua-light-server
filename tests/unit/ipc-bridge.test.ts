@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IpcBridge } from '../../src/connectors/ipc-bridge.js';
-import type { ValueUpdate } from '../../src/connectors/types.js';
+import { IpcBridge } from '../../src/connectors/core/ipc-bridge.js';
+import type { ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Creates a mock ConfigGenerator that returns an AddressSpaceConfig

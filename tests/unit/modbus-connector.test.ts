@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ModbusConnector } from '../../src/connectors/modbus-tcp/index.js';
-import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/types.js';
+import { ModbusConnector } from '../../src/connectors/protocols/modbus-tcp/index.js';
+import type { ConnectionConfig, Mapping, ValueUpdate } from '../../src/connectors/core/types.js';
 
 /**
  * Mock modbus-serial client instance.

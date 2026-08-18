@@ -1,5 +1,5 @@
 import { Connector, ConnectorType, ConnectorMetadata, ParamFieldSchema, ConnectionStatus, CurrentValue, ValueUpdateCallback } from './types.js';
-import type { SseHub } from '../api/sse-hub.js';
+import type { SseHub } from '../../api/sse-hub.js';
 
 const STATUS_POLL_INTERVAL_MS = 3_000;
 

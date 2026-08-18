@@ -9,7 +9,7 @@ import type {
   ValueUpdate,
   ValueUpdateCallback,
 } from './types.js';
-import { logService } from '../log/index.js';
+import { logService } from '../../log/index.js';
 
 /**
  * Base interface for a managed connection. Protocol-specific connectors

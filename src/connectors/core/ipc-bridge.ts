@@ -7,10 +7,10 @@
  */
 
 import type { ValueUpdate } from './types.js';
-import type { ConfigGenerator } from '../config-generator/index.js';
-import type { ProcessManager } from '../process-manager/index.js';
-import type { Database } from '../db/database.js';
-import { logService } from '../log/index.js';
+import type { ConfigGenerator } from '../../config-generator/index.js';
+import type { ProcessManager } from '../../process-manager/index.js';
+import type { Database } from '../../db/database.js';
+import { logService } from '../../log/index.js';
 
 /**
  * Bridges Connector value updates to the OPC UA runtime process.

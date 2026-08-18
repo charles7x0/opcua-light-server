@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'path';
-import { loadPlugins } from '../../src/connectors/plugin-loader.js';
+import { loadPlugins } from '../../src/connectors/core/plugin-loader.js';
 
 /**
  * Integration test for full plugin discovery at startup.
@@ -15,7 +15,7 @@ import { loadPlugins } from '../../src/connectors/plugin-loader.js';
  * this test, since the plugin loader uses dynamic `import()` on `.js` files.
  */
 
-const CONNECTORS_DIR = join(__dirname, '../../dist/connectors');
+const CONNECTORS_DIR = join(__dirname, '../../dist/connectors/protocols');
 
 describe('Plugin Discovery Integration', () => {
   it('discovers all 4 built-in connectors', async () => {

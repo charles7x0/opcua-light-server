@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import express, { type Express } from 'express';
-import { ConnectorRegistry } from '../../src/connectors/connector-registry.js';
+import { ConnectorRegistry } from '../../src/connectors/core/connector-registry.js';
 import { createConnectorsRouter } from '../../src/api/routes/connectors.js';
-import type { ConnectorMetadata, ConnectionConfig, Mapping, ConnectionStatus, CurrentValue, ValueUpdateCallback, Connector } from '../../src/connectors/types.js';
+import type { ConnectorMetadata, ConnectionConfig, Mapping, ConnectionStatus, CurrentValue, ValueUpdateCallback, Connector } from '../../src/connectors/core/types.js';
 import type { ConnectorRepository, CreateConnectionRequest, CreateMappingRequest } from '../../src/db/repositories/connector-repository.js';
 
 // ─── Mock Connector ───────────────────────────────────────────────────────────

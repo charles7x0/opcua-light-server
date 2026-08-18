@@ -12,7 +12,7 @@ import swaggerUi from 'swagger-ui-express';
 import type { Database } from '../db/database.js';
 import type { ProcessManager } from '../process-manager/index.js';
 import type { ConfigGenerator } from '../config-generator/index.js';
-import type { ConnectorRegistry } from '../connectors/connector-registry.js';
+import type { ConnectorRegistry } from '../connectors/core/connector-registry.js';
 import type { TofuManager } from '../tofu-manager/index.js';
 import type { AuthConfig } from '../auth/config.js';
 import { createAuthMiddleware } from '../auth/middleware.js';

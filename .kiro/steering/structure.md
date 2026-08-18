@@ -23,6 +23,7 @@ opcua-light-server/
 │   │   ├── modbus-tcp/           # Modbus TCP connector (modbus-serial)
 │   │   ├── ethernet-ip/          # EtherNet/IP connector (ethernet-ip, with tag discovery)
 │   │   ├── pccc/                 # PCCC connector for Allen-Bradley legacy PLCs (nodepccc)
+│   │   ├── base-connector.ts     # Abstract base class (lifecycle, polling, reconnection, caching)
 │   │   ├── connector-registry.ts # Central registry managing all connector instances
 │   │   ├── ipc-bridge.ts         # Bridges value updates to the runtime via stdin
 │   │   ├── params-validator.ts   # Validates connection params against plugin paramsSchema
@@ -81,5 +82,5 @@ opcua-light-server/
 - **Routes** are modular, one file per resource in `src/api/routes/`.
 - **Types** are centralized in `src/types/` (domain types, API DTOs, third-party declarations).
 - **Certificate utilities** are pure functions in `src/cert-generator/cert-utils.ts` (no side effects, easily testable).
-- **Connectors** implement the `ConnectorPlugin` interface from `src/connectors/types.ts` (extends `Connector` with `getMetadata()`). Each protocol lives in its own subdirectory (e.g., `src/connectors/ethernet-ip/`). Plugins are auto-discovered at startup by `plugin-loader.ts` — no manual imports in `server.ts` needed. The EtherNet/IP connector performs automatic tag discovery after connecting.
+- **Connectors** extend `BaseConnector<TClient, TManaged>` from `src/connectors/base-connector.ts`, which implements `ConnectorPlugin` and provides all shared boilerplate (connection lifecycle, reconnection scheduling, quality updates, value caching, timer management). Each protocol lives in its own subdirectory (e.g., `src/connectors/ethernet-ip/`) and only implements protocol-specific methods: `initiateConnection`, `startPolling`, `closeClient`, `extractParams`, `createManagedConnection`, and `applyParams`. Plugins are auto-discovered at startup by `plugin-loader.ts` — no manual imports in `server.ts` needed. The EtherNet/IP connector performs automatic tag discovery after connecting.
 - **The Control API always uses HTTP** — OPC UA security mode does not affect the REST API transport.
