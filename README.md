@@ -303,7 +303,7 @@ opcua-light-server/
 ├── src/                      # Control API source (TypeScript, ES modules)
 │   ├── api/
 │   │   ├── routes/           # Route modules (nodes, namespaces, object-nodes, server,
-│   │   │                     #   security, connectors, s7-alias, files, events, pki)
+│   │   │                     #   security, connectors, files, events, pki)
 │   │   ├── app.ts            # Express app assembly
 │   │   ├── server.ts         # Entry point
 │   │   └── sse-hub.ts        # SSE connection manager

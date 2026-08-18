@@ -26,7 +26,7 @@ import { createObjectNodeRouter } from './routes/object-nodes.js';
 import { createServerRouter } from './routes/server.js';
 import { createSecurityRouter } from './routes/security.js';
 import { createConnectorsRouter } from './routes/connectors.js';
-import { createS7AliasRouter } from './routes/s7-alias.js';
+
 import { createFileRouter } from './routes/files.js';
 import { createPkiRouter } from './routes/pki.js';
 import { createEventsRouter } from './routes/events.js';
@@ -96,7 +96,7 @@ export function createApp(deps: AppDependencies): AppInstance {
   // mutating request to nodes, object-nodes, or namespaces, we regenerate
   // the config and signal the runtime to reload (if it's running).
   const CONFIG_FILE_PATH = 'runtime/config.json';
-  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces', '/api/s7/mappings', '/api/connectors/mappings'];
+  const addressSpacePaths = ['/api/nodes', '/api/object-nodes', '/api/namespaces', '/api/connectors/mappings'];
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'GET') return next();
@@ -135,7 +135,6 @@ export function createApp(deps: AppDependencies): AppInstance {
   app.use('/api/server', createServerRouter({ processManager, configGenerator, connectorRegistry, opcuaPort }));
   app.use('/api/security', createSecurityRouter(securityRepo));
   app.use('/api/connectors', createConnectorsRouter(connectorRepo, connectorRegistry, database));
-  app.use('/api/s7', createS7AliasRouter(connectorRepo, connectorRegistry, database));
   app.use('/api/files', createFileRouter());
   app.use('/api/pki/certificates', createPkiRouter(tofuManager));
 

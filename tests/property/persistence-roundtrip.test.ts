@@ -4,13 +4,13 @@ import { Database } from "../../src/db/database.js";
 import { NamespaceRepository } from "../../src/db/repositories/namespace-repository.js";
 import { NodeRepository } from "../../src/db/repositories/node-repository.js";
 import { ObjectNodeRepository } from "../../src/db/repositories/object-node-repository.js";
-import { S7Repository } from "../../src/db/repositories/s7-repository.js";
+import { ConnectorRepository } from "../../src/db/repositories/connector-repository.js";
 import type { OpcUaDataType } from "../../src/types/index.js";
 
 /**
  * Property 1: Entity Persistence Round-Trip
  *
- * For any valid entity (node, namespace, folder, S7 connection, or S7 mapping),
+ * For any valid entity (node, namespace, folder, connection, or mapping),
  * creating it via the repository and then retrieving it SHALL produce an entity
  * with identical field values (excluding server-generated timestamps and IDs).
  *
@@ -21,14 +21,14 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
   let namespaceRepo: NamespaceRepository;
   let nodeRepo: NodeRepository;
   let objectNodeRepo: ObjectNodeRepository;
-  let s7Repo: S7Repository;
+  let connectorRepo: ConnectorRepository;
 
   beforeEach(() => {
     db = new Database(":memory:");
     namespaceRepo = new NamespaceRepository(db);
     nodeRepo = new NodeRepository(db);
     objectNodeRepo = new ObjectNodeRepository(db);
-    s7Repo = new S7Repository(db);
+    connectorRepo = new ConnectorRepository(db);
   });
 
   afterEach(() => {
@@ -128,24 +128,27 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
 
   const objectNodeNameArb = alphanumericString;
 
-  const s7ConnectionArb = fc.record({
+  const connectionArb = fc.record({
     name: alphanumericString,
-    host: fc
-      .tuple(
-        fc.integer({ min: 1, max: 254 }),
-        fc.integer({ min: 0, max: 255 }),
-        fc.integer({ min: 0, max: 255 }),
-        fc.integer({ min: 1, max: 254 }),
-      )
-      .map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`),
-    rack: fc.integer({ min: 0, max: 7 }),
-    slot: fc.integer({ min: 0, max: 31 }),
+    type: fc.constant('s7' as const),
+    params: fc.record({
+      host: fc
+        .tuple(
+          fc.integer({ min: 1, max: 254 }),
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 1, max: 254 }),
+        )
+        .map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`),
+      rack: fc.integer({ min: 0, max: 7 }),
+      slot: fc.integer({ min: 0, max: 31 }),
+    }),
     pollingIntervalMs: fc.integer({ min: 100, max: 10000 }),
     reconnectIntervalMs: fc.integer({ min: 1000, max: 60000 }),
     enabled: fc.boolean(),
   });
 
-  const s7MappingPlcAddressArb = fc
+  const deviceAddressArb = fc
     .tuple(fc.integer({ min: 1, max: 999 }), fc.integer({ min: 0, max: 9999 }))
     .map(([dbNum, offset]) => `DB${dbNum},REAL${offset}`);
 
@@ -253,14 +256,13 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
     );
   });
 
-  it("S7 connection persistence round-trip", () => {
+  it("connection persistence round-trip", () => {
     fc.assert(
-      fc.property(s7ConnectionArb, (input) => {
-        const result = s7Repo.createConnection({
+      fc.property(connectionArb, (input) => {
+        const result = connectorRepo.createConnection({
+          type: input.type,
           name: input.name,
-          host: input.host,
-          rack: input.rack,
-          slot: input.slot,
+          params: input.params,
           pollingIntervalMs: input.pollingIntervalMs,
           reconnectIntervalMs: input.reconnectIntervalMs,
           enabled: input.enabled,
@@ -269,12 +271,11 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         expect(result.success).toBe(true);
         if (!result.success) return;
 
-        const retrieved = s7Repo.findConnectionById(result.data.id);
+        const retrieved = connectorRepo.findConnectionById(result.data.id);
         expect(retrieved).not.toBeNull();
         expect(retrieved!.name).toBe(input.name);
-        expect(retrieved!.host).toBe(input.host);
-        expect(retrieved!.rack).toBe(input.rack);
-        expect(retrieved!.slot).toBe(input.slot);
+        expect(retrieved!.type).toBe(input.type);
+        expect(retrieved!.params).toEqual(input.params);
         expect(retrieved!.pollingIntervalMs).toBe(input.pollingIntervalMs);
         expect(retrieved!.reconnectIntervalMs).toBe(input.reconnectIntervalMs);
         expect(retrieved!.enabled).toBe(input.enabled);
@@ -283,10 +284,10 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
     );
   });
 
-  it("S7 mapping persistence round-trip", () => {
+  it("mapping persistence round-trip", () => {
     fc.assert(
-      fc.property(s7MappingPlcAddressArb, (plcAddress) => {
-        // Create prerequisite entities: namespace, node, and S7 connection
+      fc.property(deviceAddressArb, (deviceAddress) => {
+        // Create prerequisite entities: namespace, node, and connection
         const nsName = `ns_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const nsResult = namespaceRepo.create({
           name: nsName,
@@ -305,29 +306,28 @@ describe("Feature: opcua-light-server, Property 1: Entity Persistence Round-Trip
         if (!nodeResult.success) return;
 
         const connName = `conn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const connResult = s7Repo.createConnection({
+        const connResult = connectorRepo.createConnection({
+          type: 's7',
           name: connName,
-          host: "192.168.1.1",
-          rack: 0,
-          slot: 1,
+          params: { host: "192.168.1.1", rack: 0, slot: 1 },
         });
         expect(connResult.success).toBe(true);
         if (!connResult.success) return;
 
-        const mappingResult = s7Repo.createMapping({
+        const mappingResult = connectorRepo.createMapping({
           connectionId: connResult.data.id,
           nodeId: nodeResult.data.id,
-          plcAddress: plcAddress,
+          deviceAddress: deviceAddress,
         });
 
         expect(mappingResult.success).toBe(true);
         if (!mappingResult.success) return;
 
-        const retrieved = s7Repo.findMappingById(mappingResult.data.id);
+        const retrieved = connectorRepo.findMappingById(mappingResult.data.id);
         expect(retrieved).not.toBeNull();
         expect(retrieved!.connectionId).toBe(connResult.data.id);
         expect(retrieved!.nodeId).toBe(nodeResult.data.id);
-        expect(retrieved!.plcAddress).toBe(plcAddress);
+        expect(retrieved!.deviceAddress).toBe(deviceAddress);
       }),
       { numRuns: 100 },
     );
