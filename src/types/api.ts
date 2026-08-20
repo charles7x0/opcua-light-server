@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Request/response DTOs and error format for the Control API.
  */
 
@@ -109,26 +109,6 @@ export interface GenerateCertificateRequest {
   force?: boolean;
 }
 
-// --- S7 DTOs ---
-
-/** Request body for creating an S7 connection. */
-export interface CreateS7ConnectionRequest {
-  name: string;
-  host: string;
-  rack: number;
-  slot: number;
-  pollingIntervalMs?: number;
-  reconnectIntervalMs?: number;
-  enabled?: boolean;
-}
-
-/** Request body for creating an S7 mapping. */
-export interface CreateS7MappingRequest {
-  connectionId: string;
-  nodeId: string;
-  plcAddress: string;
-  description?: string;
-}
 
 // --- Server Lifecycle DTOs ---
 

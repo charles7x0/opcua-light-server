@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Core domain types for OPC UA Light Server.
  */
 
@@ -83,36 +83,8 @@ export interface StartResult {
   startedAt: Date;
 }
 
-/** S7 PLC connection configuration. */
-export interface S7ConnectionConfig {
-  id: string;
-  name: string;
-  host: string;
-  rack: number;
-  slot: number;
-  pollingIntervalMs: number;
-  reconnectIntervalMs: number;
-  enabled: boolean;
-  createdAt: string;
-}
 
-/** Mapping between a PLC variable and an OPC UA node. */
-export interface S7Mapping {
-  id: string;
-  connectionId: string;
-  nodeId: string;
-  plcAddress: string;
-  description?: string;
-  createdAt: string;
-}
 
-/** Status of an S7 PLC connection. */
-export interface S7ConnectionStatus {
-  connectionId: string;
-  state: 'connected' | 'disconnected' | 'error';
-  lastPollAt?: string;
-  errorMessage?: string;
-}
 
 /** Session state for a connected OPC UA client. */
 export type ClientSessionState = 'Created' | 'Activated' | 'Closing';
