@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { logStream } from './useLogStream';
 
@@ -53,7 +53,7 @@ export function useSSE(): { connectionState: SseConnectionState } {
       eventSource = es;
       setConnectionState('connecting');
 
-      // Start a timer — if we don't get `onopen` within the threshold,
+      // Start a timer â€” if we don't get `onopen` within the threshold,
       // consider it disconnected. This covers the case where EventSource
       // keeps retrying internally but never succeeds.
       disconnectTimer = setTimeout(() => {
@@ -64,7 +64,7 @@ export function useSSE(): { connectionState: SseConnectionState } {
 
       es.onopen = (): void => {
         if (disposed) return;
-        // Clear the disconnect threshold timer — we're connected
+        // Clear the disconnect threshold timer â€” we're connected
         if (disconnectTimer) {
           clearTimeout(disconnectTimer);
           disconnectTimer = null;
@@ -86,7 +86,7 @@ export function useSSE(): { connectionState: SseConnectionState } {
             if (!disposed) connect();
           }, RECONNECT_DELAY_MS);
         } else {
-          // readyState is CONNECTING (0) — the browser is auto-retrying.
+          // readyState is CONNECTING (0) â€” the browser is auto-retrying.
           // Start the disconnect threshold timer if not already running.
           if (!disconnectTimer) {
             disconnectTimer = setTimeout(() => {
@@ -118,7 +118,6 @@ export function useSSE(): { connectionState: SseConnectionState } {
         try {
           const data = JSON.parse(e.data);
           queryClientRef.current.setQueryData(['connectors-status'], data);
-          queryClientRef.current.setQueryData(['s7-status'], data);
         } catch { /* ignore */ }
       });
 
@@ -126,7 +125,6 @@ export function useSSE(): { connectionState: SseConnectionState } {
         try {
           const data = JSON.parse(e.data);
           queryClientRef.current.setQueryData(['connectors-values'], data);
-          queryClientRef.current.setQueryData(['s7-values'], data);
         } catch { /* ignore */ }
       });
 
@@ -148,7 +146,7 @@ export function useSSE(): { connectionState: SseConnectionState } {
         eventSource = null;
       }
     };
-  }, []); // No dependencies — runs once on mount, uses refs for mutable values
+  }, []); // No dependencies â€” runs once on mount, uses refs for mutable values
 
   // Fallback polling when disconnected
   useEffect(() => {
@@ -157,17 +155,13 @@ export function useSSE(): { connectionState: SseConnectionState } {
       queryClient.setQueryDefaults(['server-status'], { refetchInterval: 5000 });
       queryClient.setQueryDefaults(['server', 'clients'], { refetchInterval: 3000 });
       queryClient.setQueryDefaults(['connectors-status'], { refetchInterval: 5000 });
-      queryClient.setQueryDefaults(['s7-status'], { refetchInterval: 5000 });
       queryClient.setQueryDefaults(['connectors-values'], { refetchInterval: 2000 });
-      queryClient.setQueryDefaults(['s7-values'], { refetchInterval: 2000 });
     } else if (connectionState === 'connected') {
       queryClient.setQueryDefaults(['serverStatus'], { refetchInterval: false });
       queryClient.setQueryDefaults(['server-status'], { refetchInterval: false });
       queryClient.setQueryDefaults(['server', 'clients'], { refetchInterval: false });
       queryClient.setQueryDefaults(['connectors-status'], { refetchInterval: false });
-      queryClient.setQueryDefaults(['s7-status'], { refetchInterval: false });
       queryClient.setQueryDefaults(['connectors-values'], { refetchInterval: false });
-      queryClient.setQueryDefaults(['s7-values'], { refetchInterval: false });
     }
   }, [connectionState, queryClient]);
 
