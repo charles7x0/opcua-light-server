@@ -252,19 +252,6 @@ A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On
 | PUT | `/api/security/policy` | Set security mode |
 | POST | `/api/security/certificate` | Upload certificate paths |
 
-### S7 Connector
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/s7/connections` | Create S7 connection |
-| GET | `/api/s7/connections` | List connections |
-| DELETE | `/api/s7/connections/:id` | Delete connection |
-| POST | `/api/s7/mappings` | Create PLC-to-node mapping |
-| GET | `/api/s7/mappings` | List mappings |
-| DELETE | `/api/s7/mappings/:id` | Delete mapping |
-| GET | `/api/s7/status` | Get connection statuses |
-| GET | `/api/s7/values` | Get last-read values for all mapped variables |
-
 ### Connectors (Multi-Protocol)
 
 | Method | Endpoint | Description |

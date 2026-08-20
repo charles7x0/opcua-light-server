@@ -1,5 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process';
-import { networkInterfaces, platform } from 'os';
+﻿import { spawn, type ChildProcess } from 'child_process';
+import { platform } from 'os';
+import { detectPrimaryIp } from '../utils/network.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import type { ClientSession, ServerStatus, StartResult } from '../types/index.js';
@@ -34,7 +35,7 @@ export class ProcessManager {
 
   /**
    * Set the SseHub instance for broadcasting real-time events.
-   * Optional — ProcessManager works fine without an SseHub (backward compatibility).
+   * Optional â€” ProcessManager works fine without an SseHub (backward compatibility).
    */
   setSseHub(hub: SseHub): void {
     this.sseHub = hub;
@@ -239,7 +240,7 @@ export class ProcessManager {
   private attachEventListeners(child: ChildProcess): void {
     child.on('exit', (code, signal) => {
       if (!this.stopping) {
-        // Unexpected exit — this is a crash
+        // Unexpected exit â€” this is a crash
         let reason = signal
           ? `Process killed by signal: ${signal}`
           : `Process exited with code: ${code}`;
@@ -285,7 +286,7 @@ export class ProcessManager {
     if (child.stdin) {
       child.stdin.on('error', (err: NodeJS.ErrnoException) => {
         // EPIPE is expected when the runtime process exits while we still
-        // have a reference — it's handled via the 'exit' listener above.
+        // have a reference â€” it's handled via the 'exit' listener above.
         if (err.code !== 'EPIPE') {
           this.lastError = `stdin error: ${err.message}`;
         }
@@ -398,22 +399,4 @@ export class ProcessManager {
       this.statusTimer = null;
     }
   }
-}
-
-/**
- * Detect the primary non-loopback IPv4 address of this host.
- * Returns the first address found, or '127.0.0.1' if none detected.
- */
-function detectPrimaryIp(): string {
-  const interfaces = networkInterfaces();
-  for (const name in interfaces) {
-    const nets = interfaces[name];
-    if (!nets) continue;
-    for (const net of nets) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return '127.0.0.1';
 }

@@ -101,6 +101,5 @@ cd runtime && mkdir build && cd build && cmake .. && cmake --build .
 | POST | `/api/nodes/import/csv` | Import nodes from CSV |
 | GET | `/api/namespaces` | List namespaces |
 | GET | `/api/logs` | System log entries |
-| GET/POST/PUT/DELETE | `/api/s7/*` | S7 PLC connections and mappings |
 | GET | `/api/connectors/protocols` | Available protocol plugins with metadata (unauthenticated) |
 | GET/POST/PUT/DELETE | `/api/connectors/*` | Multi-protocol connections, mappings, status, values |
