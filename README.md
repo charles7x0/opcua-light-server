@@ -1,45 +1,45 @@
-# OPC UA Light Server
+﻿# OPC UA Light Server
 
-A lightweight OPC UA server system with a Node.js/Express Control API, an [open62541](https://www.open62541.org/) C runtime, and a React web UI. Manage your OPC UA address space, server lifecycle, security, and optional Siemens S7 PLC connections — all from a browser.
+A lightweight OPC UA server system with a Node.js/Express Control API, an [open62541](https://www.open62541.org/) C runtime, and a React web UI. Manage your OPC UA address space, server lifecycle, security, and optional Siemens S7 PLC connections â€” all from a browser.
 
 ## Architecture
 
 ```
-┌─────────────────┐       HTTP/REST       ┌──────────────────────────────┐
-│   React Web UI  │ ◄──────────────────── │   Node.js Control API        │
-│   (Vite + TW)   │                       │   Express + better-sqlite3   │
-└─────────────────┘                       └──────────┬───────────────────┘
-                                                     │ spawn / signal
-                                                     ▼
-                                          ┌──────────────────────────────┐
-  OPC UA Clients ◄── TCP 4840 ──────────► │   open62541 Runtime (C)      │
-                                          └──────────────────────────────┘
-                                                     ▲
-                                                     │ IPC (value updates)
-                                          ┌──────────┴───────────────────┐
-                                          │   Connector Registry         │
-                                          │   S7 · Modbus TCP ·          │
-  Industrial PLCs ◄── S7/Modbus/CIP ────► │   EtherNet/IP                │
-                                          │   polling + reconnection     │
-                                          └──────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”       HTTP/REST       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚   React Web UI  â”‚ â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ â”‚   Node.js Control API        â”‚
+â”‚   (Vite + TW)   â”‚                       â”‚   Express + better-sqlite3   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                                                     â”‚ spawn / signal
+                                                     â–¼
+                                          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  OPC UA Clients â—„â”€â”€ TCP 4840 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º â”‚   open62541 Runtime (C)      â”‚
+                                          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                                                     â–²
+                                                     â”‚ IPC (value updates)
+                                          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                                          â”‚   Connector Registry         â”‚
+                                          â”‚   S7 Â· Modbus TCP Â·          â”‚
+  Industrial PLCs â—„â”€â”€ S7/Modbus/CIP â”€â”€â”€â”€â–º â”‚   EtherNet/IP                â”‚
+                                          â”‚   polling + reconnection     â”‚
+                                          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Key design decisions:**
 
-- The C runtime runs as a separate OS process for isolation — a crash doesn't take down the API.
+- The C runtime runs as a separate OS process for isolation â€” a crash doesn't take down the API.
 - Communication between the API and runtime uses a JSON configuration file (written by the API, read by the runtime on start/reload).
 - SQLite provides persistence with zero external infrastructure.
 - The Control API process installs global error safety nets (`uncaughtException`, `unhandledRejection`) to survive transient errors from connector libraries (e.g., socket errors when a PLC drops abruptly). These errors are logged via the LogService and visible in the system log panel.
 
 ## Features
 
-- **Address Space Management** — CRUD for namespaces, folders, and nodes via REST API and web UI
-- **Server Lifecycle** — Start, stop, and hot-reload the OPC UA runtime from the dashboard
-- **Security Configuration** — Select security mode (None / Sign / SignAndEncrypt) and manage certificates
-- **Multi-Protocol PLC Integration** — Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a plugin-based connector architecture with automatic discovery, polling, reconnection, and tag discovery
-- **Web Dashboard** — Real-time server status with connector health overview, security/certificate summary, address space stats, system info (endpoint URL with copy), and per-client session details
-- **Real-Time Updates (SSE)** — Single Server-Sent Events connection replaces polling; multiplexed events for status, clients, connectors, and logs
-- **Authentication** — API key or JWT protection on mutating endpoints
+- **Address Space Management** â€” CRUD for namespaces, folders, and nodes via REST API and web UI
+- **Server Lifecycle** â€” Start, stop, and hot-reload the OPC UA runtime from the dashboard
+- **Security Configuration** â€” Select security mode (None / Sign / SignAndEncrypt) and manage certificates
+- **Multi-Protocol PLC Integration** â€” Connect to Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC (SLC 500/MicroLogix/PLC-5) devices via a plugin-based connector architecture with automatic discovery, polling, reconnection, and tag discovery
+- **Web Dashboard** â€” Real-time server status with connector health overview, security/certificate summary, address space stats, system info (endpoint URL with copy), and per-client session details
+- **Real-Time Updates (SSE)** â€” Single Server-Sent Events connection replaces polling; multiplexed events for status, clients, connectors, and logs
+- **Authentication** â€” API key or JWT protection on mutating endpoints
 
 ## Prerequisites
 
@@ -108,13 +108,13 @@ cp .env.example .env
 | `PORT` | `3100` | Control API listen port |
 | `OPCUA_PORT` | `4840` | OPC UA runtime listen port |
 | `AUTH_MODE` | `none` | Authentication mode: `none`, `api-key`, or `jwt` |
-| `API_KEYS` | — | Comma-separated list of valid API keys |
-| `JWT_SECRET` | — | Secret for JWT token verification |
-| `JWT_ISSUER` | — | Optional expected JWT issuer claim |
+| `API_KEYS` | â€” | Comma-separated list of valid API keys |
+| `JWT_SECRET` | â€” | Secret for JWT token verification |
+| `JWT_ISSUER` | â€” | Optional expected JWT issuer claim |
 | `DB_PATH` | `runtime/opcua-light.db` | SQLite database file path |
 | `RUNTIME_PATH` | `runtime/opcua-runtime` | Path to the compiled open62541 binary |
 | `CONFIG_PATH` | `runtime/config.json` | Generated config file path |
-| `CONNECTOR_PLUGINS_DIR` | — | Optional path to external connector plugins directory |
+| `CONNECTOR_PLUGINS_DIR` | â€” | Optional path to external connector plugins directory |
 
 ### Authentication
 
@@ -147,15 +147,15 @@ The security mode controls transport-level security between OPC UA clients and t
 
 | Mode | Signing | Encryption | Use Case |
 |------|---------|------------|----------|
-| **None** | ✗ | ✗ | Development, local testing, trusted network segments |
-| **Sign** | ✓ | ✗ | Physically isolated networks where tamper detection is needed but eavesdropping is acceptable |
-| **SignAndEncrypt** | ✓ | ✓ | Production / untrusted networks — full confidentiality and integrity |
+| **None** | âœ— | âœ— | Development, local testing, trusted network segments |
+| **Sign** | âœ“ | âœ— | Physically isolated networks where tamper detection is needed but eavesdropping is acceptable |
+| **SignAndEncrypt** | âœ“ | âœ“ | Production / untrusted networks â€” full confidentiality and integrity |
 
 **How it works:**
 
 - Configure via `PUT /api/security/policy` or the web UI Security Settings panel.
 - When set to **Sign** or **SignAndEncrypt**, the server requires a certificate and private key. Generate a self-signed certificate through the API (`POST /api/security/generate`) or upload paths to existing files (`POST /api/security/certificate`).
-- The C runtime enforces the selected policy at the open62541 level — clients that don't meet the security requirement are rejected.
+- The C runtime enforces the selected policy at the open62541 level â€” clients that don't meet the security requirement are rejected.
 - Certificate health (days until expiry) is monitored and displayed in the web UI status bar.
 
 **Certificate management:**
@@ -271,116 +271,118 @@ A `:heartbeat` comment is sent every 30 seconds to keep the connection alive. On
 
 Supported protocol types: `s7`, `modbus-tcp`, `ethernet-ip`, `pccc`
 
-**Plugin architecture:** Connectors are discovered automatically at startup from `src/connectors/`. Each connector extends the `BaseConnector<TClient, TManaged>` abstract class (which implements `ConnectorPlugin`) and only needs to provide protocol-specific logic: connection initiation, polling, and client cleanup. The base class handles all shared boilerplate — connection lifecycle, reconnection scheduling, quality updates, value caching, and timer management. Each plugin exposes a `ParamFieldSchema[]` describing its connection parameters. The frontend fetches this schema via `GET /api/connectors/protocols` to render dynamic forms. New protocols can be added by creating a subdirectory with an `index.ts` exporting a class that extends `BaseConnector` — no changes to core files required.
+**Plugin architecture:** Connectors are discovered automatically at startup from `src/connectors/`. Each connector extends the `BaseConnector<TClient, TManaged>` abstract class (which implements `ConnectorPlugin`) and only needs to provide protocol-specific logic: connection initiation, polling, and client cleanup. The base class handles all shared boilerplate â€” connection lifecycle, reconnection scheduling, quality updates, value caching, and timer management. Each plugin exposes a `ParamFieldSchema[]` describing its connection parameters. The frontend fetches this schema via `GET /api/connectors/protocols` to render dynamic forms. New protocols can be added by creating a subdirectory with an `index.ts` exporting a class that extends `BaseConnector` â€” no changes to core files required.
 
-**EtherNet/IP notes:** After connecting to a Rockwell PLC, the connector performs automatic tag discovery so the library learns data types for subsequent read/write operations. Discovery failures are non-fatal — polling will still attempt reads. Transient poll errors (read timeouts, CIP protocol errors) mark affected node quality as "bad" without triggering a full reconnection, allowing the next poll cycle to recover automatically.
+**EtherNet/IP notes:** After connecting to a Rockwell PLC, the connector performs automatic tag discovery so the library learns data types for subsequent read/write operations. Discovery failures are non-fatal â€” polling will still attempt reads. Transient poll errors (read timeouts, CIP protocol errors) mark affected node quality as "bad" without triggering a full reconnection, allowing the next poll cycle to recover automatically.
 
-**PCCC notes:** Connects to Allen-Bradley legacy PLCs (SLC 500, MicroLogix, PLC-5) over EtherNet/IP using file-based addressing. Addresses use standard PCCC format (e.g., `N7:0`, `F8:1`, `B3:0/5`, `T4:0.ACC`). The connector uses pass-through translation — address validation happens at mapping time only.
+**PCCC notes:** Connects to Allen-Bradley legacy PLCs (SLC 500, MicroLogix, PLC-5) over EtherNet/IP using file-based addressing. Addresses use standard PCCC format (e.g., `N7:0`, `F8:1`, `B3:0/5`, `T4:0.ACC`). The connector uses pass-through translation â€” address validation happens at mapping time only.
 
 ## Project Structure
 
 ```
 opcua-light-server/
-├── .env.example              # Environment variable template
-├── package.json              # Dependencies and scripts
-├── tsconfig.json             # TypeScript config (backend)
-├── tsconfig.web.json         # TypeScript config (web references)
-├── vitest.config.ts          # Base Vitest config
-├── vitest.workspace.ts       # Multi-project test workspace
-├── src/                      # Control API source (TypeScript, ES modules)
-│   ├── api/
-│   │   ├── routes/           # Route modules (nodes, namespaces, object-nodes, server,
-│   │   │                     #   security, connectors, files, events, pki)
-│   │   ├── app.ts            # Express app assembly
-│   │   ├── server.ts         # Entry point
-│   │   └── sse-hub.ts        # SSE connection manager
-│   ├── auth/                 # Authentication middleware and config
-│   ├── cert-generator/       # Certificate generation, DER/PEM conversion, validation
-│   ├── config-generator/     # Generates JSON config consumed by the C runtime
+â”œâ”€â”€ .env.example              # Environment variable template
+â”œâ”€â”€ package.json              # Dependencies and scripts
+â”œâ”€â”€ tsconfig.json             # TypeScript config (backend)
+â”œâ”€â”€ tsconfig.web.json         # TypeScript config (web references)
+â”œâ”€â”€ vitest.config.ts          # Base Vitest config
+â”œâ”€â”€ vitest.workspace.ts       # Multi-project test workspace
+â”œâ”€â”€ src/                      # Control API source (TypeScript, ES modules)
+â”‚   â”œâ”€â”€ api/
+â”‚   â”‚   â”œâ”€â”€ routes/           # Route modules (nodes, namespaces, object-nodes, server,
+â”‚   â”‚   â”‚                     #   security, connectors, files, events, pki)
+â”‚   â”‚   â”œâ”€â”€ app.ts            # Express app assembly
+â”‚   â”‚   â”œâ”€â”€ server.ts         # Entry point
+â”‚   â”‚   â””â”€â”€ sse-hub.ts        # SSE connection manager
+â”‚   â”œâ”€â”€ auth/                 # Authentication middleware and config
+â”‚   â”œâ”€â”€ cert-generator/       # Certificate generation, DER/PEM conversion, validation
+â”‚   â”œâ”€â”€ config-generator/     # Generates JSON config consumed by the C runtime
 │   ├── connectors/           # Multi-protocol connector plugin architecture
-│   │   ├── s7/              # Siemens S7 (nodes7)
-│   │   ├── modbus-tcp/      # Modbus TCP (modbus-serial)
-│   │   ├── ethernet-ip/     # EtherNet/IP (ethernet-ip, with tag discovery)
-│   │   ├── pccc/            # Allen-Bradley PCCC (nodepccc)
-│   │   ├── base-connector.ts # Abstract base class (lifecycle, polling, reconnection, caching)
-│   │   ├── connector-registry.ts
-│   │   ├── ipc-bridge.ts    # Bridges value updates to runtime via stdin
-│   │   ├── params-validator.ts  # Validates connection params against plugin schema
-│   │   ├── plugin-loader.ts # Auto-discovers connector plugins at startup
-│   │   └── types.ts         # Connector, ConnectorPlugin, ConnectorMetadata interfaces
-│   ├── db/
-│   │   ├── repositories/    # Data access layer (one per domain entity)
-│   │   ├── database.ts      # SQLite wrapper
-│   │   └── schema.sql       # Database schema
-│   ├── log/                  # In-memory log service
-│   ├── process-manager/      # Manages the open62541 child process lifecycle
-│   ├── tofu-manager/         # Trust-on-First-Use certificate management
-│   ├── types/                # Domain types, DTOs, declaration files
-│   └── utils/                # Shared utilities (CSV parsing)
-├── web/                      # React Web UI (separate npm package)
-│   └── src/
-│       ├── api/              # Typed API client modules (one per domain)
-│       ├── components/       # Shared UI primitives
-│       │   ├── actions/      # Button, CopyButton, FileButton, ConfirmDialog
-│       │   ├── feedback/     # Alert, CardPlaceholder
-│       │   ├── inputs/       # Input, Select, Textarea, FormField
-│       │   ├── layout/       # Card, Badge, InfoRow, StatusDot
-│       │   └── styles.ts     # Centralized Tailwind class maps
-│       ├── hooks/            # Custom React hooks
-│       │   ├── useServerStatus.ts
-│       │   ├── useSecurityConfig.ts
-│       │   ├── useServerControls.ts
-│       │   ├── useSSE.ts
-│       │   ├── useLogStream.ts
-│       │   └── useNodePaths.ts
-│       ├── layout/           # App shell, NavBar, StatusBar, LogPanel
-│       ├── screens/
-│       │   ├── address-space/  # Tree, NodeForm, NodeDetailPanel, NamespaceManager
-│       │   ├── connectors/    # ConnectorsManager, ConnectionCard/Form, MappingTable
-│       │   ├── dashboard/     # ServerIdentityStrip, ConnectorHealthPanel,
-│       │   │                  #   CertificateHealthPanel, AddressSpaceSummaryPanel,
-│       │   │                  #   SystemInfoPanel, ConnectedClientsTable
-│       │   ├── s7/            # Legacy S7ConnectionManager
-│       │   └── security/      # SecuritySettings, CertificatePanel, GenerateCertificateCard
-│       ├── utils/             # formatUptime, formatRelativeDuration, downloadFile
-│       └── main.tsx           # Entry point
-├── runtime/                  # open62541 C Runtime
-│   ├── include/              # Shared C headers (runtime_context.h)
-│   ├── src/
-│   │   ├── address_space/    # Address space builder/clearer
-│   │   ├── config/           # JSON config parser
-│   │   ├── ipc/              # Stdin IPC processor (value updates)
-│   │   ├── security/         # Security config, TOFU verifier
-│   │   ├── status/           # status.json writer (client sessions)
-│   │   ├── util/             # File I/O, logging, node ID parser
-│   │   ├── main.c            # Entry point
-│   │   └── server.c          # Server lifecycle
-│   ├── CMakeLists.txt        # CMake build config
-│   ├── build.ps1             # Windows build script
-│   └── build.sh              # Linux/macOS build script
-├── tests/                    # All tests (separate from src)
-│   ├── unit/                 # Unit tests (repositories, routes, middleware, connectors)
-│   ├── property/             # Property-based tests (fast-check)
-│   ├── integration/          # Integration tests (runtime lifecycle, SSE)
-│   ├── components/           # React component tests (Testing Library)
-│   └── stress/               # Performance/load tests
-├── docs/                     # Documentation
-│   ├── openapi.json          # OpenAPI 3.0 spec
-│   └── error-recovery-audit.md
-├── data/                     # Runtime data directory
-│   ├── certs/                # Generated certificates
-│   └── pki/                  # Trust-on-First-Use certificate store
-└── dist/                     # Compiled JS output (gitignored)
+│   │   ├── core/            # Framework infrastructure
+│   │   │   ├── base-connector.ts  # Abstract base class (lifecycle, polling, reconnection)
+│   │   │   ├── connector-registry.ts  # Central registry managing all connector instances
+│   │   │   ├── ipc-bridge.ts      # Bridges value updates to runtime via stdin
+│   │   │   ├── params-validator.ts # Validates connection params against plugin schema
+│   │   │   ├── plugin-loader.ts   # Auto-discovers connector plugins at startup
+│   │   │   └── types.ts           # Connector, ConnectorPlugin, ConnectorMetadata interfaces
+│   │   ├── protocols/       # Protocol plugins (auto-discovered at startup)
+│   │   │   ├── s7/          # Siemens S7 (nodes7)
+│   │   │   ├── modbus-tcp/  # Modbus TCP (modbus-serial)
+│   │   │   ├── ethernet-ip/ # EtherNet/IP (ethernet-ip, with tag discovery)
+│   │   │   └── pccc/        # Allen-Bradley PCCC (nodepccc)
+│   │   └── index.ts         # Barrel export
+â”‚   â”œâ”€â”€ db/
+â”‚   â”‚   â”œâ”€â”€ repositories/    # Data access layer (one per domain entity)
+â”‚   â”‚   â”œâ”€â”€ database.ts      # SQLite wrapper
+â”‚   â”‚   â””â”€â”€ schema.sql       # Database schema
+â”‚   â”œâ”€â”€ log/                  # In-memory log service
+â”‚   â”œâ”€â”€ process-manager/      # Manages the open62541 child process lifecycle
+â”‚   â”œâ”€â”€ tofu-manager/         # Trust-on-First-Use certificate management
+â”‚   â”œâ”€â”€ types/                # Domain types, DTOs, declaration files
+â”‚   â””â”€â”€ utils/                # Shared utilities (CSV parsing, network detection)
+â”œâ”€â”€ web/                      # React Web UI (separate npm package)
+â”‚   â””â”€â”€ src/
+â”‚       â”œâ”€â”€ api/              # Typed API client modules (one per domain)
+â”‚       â”œâ”€â”€ components/       # Shared UI primitives
+â”‚       â”‚   â”œâ”€â”€ actions/      # Button, CopyButton, FileButton, ConfirmDialog
+â”‚       â”‚   â”œâ”€â”€ feedback/     # Alert, CardPlaceholder
+â”‚       â”‚   â”œâ”€â”€ inputs/       # Input, Select, Textarea, FormField
+â”‚       â”‚   â”œâ”€â”€ layout/       # Card, Badge, InfoRow, StatusDot
+â”‚       â”‚   â””â”€â”€ styles.ts     # Centralized Tailwind class maps
+â”‚       â”œâ”€â”€ hooks/            # Custom React hooks
+â”‚       â”‚   â”œâ”€â”€ useServerStatus.ts
+â”‚       â”‚   â”œâ”€â”€ useSecurityConfig.ts
+â”‚       â”‚   â”œâ”€â”€ useServerControls.ts
+â”‚       â”‚   â”œâ”€â”€ useSSE.ts
+â”‚       â”‚   â”œâ”€â”€ useLogStream.ts
+â”‚       â”‚   â””â”€â”€ useNodePaths.ts
+â”‚       â”œâ”€â”€ layout/           # App shell, NavBar, StatusBar, LogPanel
+â”‚       â”œâ”€â”€ screens/
+â”‚       â”‚   â”œâ”€â”€ address-space/  # Tree, NodeForm, NodeDetailPanel, NamespaceManager
+â”‚       â”‚   â”œâ”€â”€ connectors/    # ConnectorsManager, ConnectionCard/Form, MappingTable
+â”‚       â”‚   â”œâ”€â”€ dashboard/     # ServerIdentityStrip, ConnectorHealthPanel,
+â”‚       â”‚   â”‚                  #   CertificateHealthPanel, AddressSpaceSummaryPanel,
+â”‚       â”‚   â”‚                  #   SystemInfoPanel, ConnectedClientsTable
+â”‚       â”‚   â””â”€â”€ security/      # SecuritySettings, CertificatePanel, GenerateCertificateCard
+â”‚       â”œâ”€â”€ utils/             # formatUptime, formatRelativeDuration, downloadFile
+â”‚       â””â”€â”€ main.tsx           # Entry point
+â”œâ”€â”€ runtime/                  # open62541 C Runtime
+â”‚   â”œâ”€â”€ include/              # Shared C headers (runtime_context.h)
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ address_space/    # Address space builder/clearer
+â”‚   â”‚   â”œâ”€â”€ config/           # JSON config parser
+â”‚   â”‚   â”œâ”€â”€ ipc/              # Stdin IPC processor (value updates)
+â”‚   â”‚   â”œâ”€â”€ security/         # Security config, TOFU verifier
+â”‚   â”‚   â”œâ”€â”€ status/           # status.json writer (client sessions)
+â”‚   â”‚   â”œâ”€â”€ util/             # File I/O, logging, node ID parser
+â”‚   â”‚   â”œâ”€â”€ main.c            # Entry point
+â”‚   â”‚   â””â”€â”€ server.c          # Server lifecycle
+â”‚   â”œâ”€â”€ CMakeLists.txt        # CMake build config
+â”‚   â”œâ”€â”€ build.ps1             # Windows build script
+â”‚   â””â”€â”€ build.sh              # Linux/macOS build script
+â”œâ”€â”€ tests/                    # All tests (separate from src)
+â”‚   â”œâ”€â”€ unit/                 # Unit tests (repositories, routes, middleware, connectors)
+â”‚   â”œâ”€â”€ property/             # Property-based tests (fast-check)
+â”‚   â”œâ”€â”€ integration/          # Integration tests (runtime lifecycle, SSE)
+â”‚   â”œâ”€â”€ components/           # React component tests (Testing Library)
+â”‚   â””â”€â”€ stress/               # Performance/load tests
+â”œâ”€â”€ docs/                     # Documentation
+â”‚   â”œâ”€â”€ openapi.json          # OpenAPI 3.0 spec
+â”‚   â””â”€â”€ error-recovery-audit.md
+â”œâ”€â”€ data/                     # Runtime data directory
+â”‚   â”œâ”€â”€ certs/                # Generated certificates
+â”‚   â””â”€â”€ pki/                  # Trust-on-First-Use certificate store
+â””â”€â”€ dist/                     # Compiled JS output (gitignored)
 ```
 
 ## Testing
 
 The project uses [Vitest](https://vitest.dev/) with four test projects:
 
-- **Unit** — Repository logic, validation, middleware, route handlers
-- **Property** — Correctness properties verified with [fast-check](https://github.com/dubzzz/fast-check) (persistence round-trips, cascade deletion, uniqueness constraints, auth enforcement, etc.)
-- **Integration** — Runtime lifecycle with the actual open62541 binary
-- **Components** — React component tests with Testing Library
+- **Unit** â€” Repository logic, validation, middleware, route handlers
+- **Property** â€” Correctness properties verified with [fast-check](https://github.com/dubzzz/fast-check) (persistence round-trips, cascade deletion, uniqueness constraints, auth enforcement, etc.)
+- **Integration** â€” Runtime lifecycle with the actual open62541 binary
+- **Components** â€” React component tests with Testing Library
 
 ```bash
 npm test                  # Run all
@@ -446,4 +448,4 @@ chore: initial project setup
 
 ## License
 
-Private — not published to npm.
+Private â€” not published to npm.
