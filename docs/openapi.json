@@ -1,9 +1,9 @@
-{
+﻿{
   "openapi": "3.0.3",
   "info": {
     "title": "OPC UA Light Server - Control API",
-    "description": "REST API for managing the OPC UA Light Server: address space, server lifecycle, security, S7 PLC connections, and certificate trust.",
-    "version": "0.1.0",
+    "description": "REST API for managing the OPC UA Light Server: address space, server lifecycle, security, multi-protocol PLC connections, and certificate trust.",
+    "version": "0.2.0",
     "license": { "name": "MIT" }
   },
   "servers": [
@@ -15,9 +15,10 @@
     { "name": "Namespaces", "description": "Namespace management" },
     { "name": "Object Nodes", "description": "Object node hierarchy" },
     { "name": "Security", "description": "Security mode and certificates" },
-    { "name": "S7", "description": "Siemens S7 PLC connections and mappings" },
+    { "name": "Connectors", "description": "Multi-protocol PLC connections, mappings, and live values" },
     { "name": "PKI", "description": "Client certificate trust management (TOFU)" },
     { "name": "Files", "description": "Server-side file browser" },
+    { "name": "Events", "description": "Real-time Server-Sent Events stream" },
     { "name": "Logs", "description": "System log entries" }
   ],
   "components": {
@@ -162,7 +163,9 @@
           "uptime": { "type": "integer", "description": "Seconds since start" },
           "pid": { "type": "integer" },
           "connectedClients": { "type": "integer" },
-          "lastError": { "type": "string" }
+          "lastError": { "type": "string" },
+          "hostname": { "type": "string", "description": "Primary non-loopback IPv4 address" },
+          "opcuaPort": { "type": "integer", "description": "OPC UA runtime port", "default": 4840 }
         }
       },
       "StartServerResponse": {
@@ -172,55 +175,93 @@
           "startedAt": { "type": "string", "format": "date-time" }
         }
       },
-      "S7Connection": {
+      "ClientSession": {
+        "type": "object",
+        "properties": {
+          "applicationName": { "type": "string" },
+          "applicationUri": { "type": "string" },
+          "securityPolicyUri": { "type": "string" },
+          "clientAddress": { "type": "string" },
+          "connectTime": { "type": "string", "format": "date-time" },
+          "sessionState": { "type": "string", "enum": ["Created", "Activated", "Closing"] }
+        }
+      },
+      "ParamFieldSchema": {
+        "type": "object",
+        "required": ["key", "label", "type", "required"],
+        "properties": {
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "type": { "type": "string", "enum": ["text", "number", "boolean", "select"] },
+          "required": { "type": "boolean" },
+          "defaultValue": {},
+          "placeholder": { "type": "string" },
+          "min": { "type": "number" },
+          "max": { "type": "number" },
+          "options": { "type": "array", "items": { "type": "object", "properties": { "value": { "type": "string" }, "label": { "type": "string" } } } },
+          "pattern": { "type": "string" },
+          "patternMessage": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "ConnectorMetadata": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "displayName": { "type": "string" },
+          "description": { "type": "string" },
+          "icon": { "type": "string" },
+          "version": { "type": "string" },
+          "paramsSchema": { "type": "array", "items": { "$ref": "#/components/schemas/ParamFieldSchema" } }
+        }
+      },
+      "ConnectorConnection": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "type": { "type": "string", "description": "Protocol type (s7, modbus-tcp, ethernet-ip, pccc)" },
           "name": { "type": "string" },
-          "host": { "type": "string" },
-          "rack": { "type": "integer" },
-          "slot": { "type": "integer" },
+          "params": { "type": "object", "additionalProperties": true },
           "pollingIntervalMs": { "type": "integer" },
           "reconnectIntervalMs": { "type": "integer" },
           "enabled": { "type": "boolean" },
           "createdAt": { "type": "string", "format": "date-time" }
         }
       },
-      "CreateS7ConnectionRequest": {
+      "CreateConnectionRequest": {
         "type": "object",
-        "required": ["name", "host", "rack", "slot"],
+        "required": ["type", "name", "params"],
         "properties": {
+          "type": { "type": "string" },
           "name": { "type": "string" },
-          "host": { "type": "string" },
-          "rack": { "type": "integer" },
-          "slot": { "type": "integer" },
+          "params": { "type": "object", "additionalProperties": true },
           "pollingIntervalMs": { "type": "integer", "default": 1000 },
           "reconnectIntervalMs": { "type": "integer", "default": 5000 },
           "enabled": { "type": "boolean", "default": true }
         }
       },
-      "S7Mapping": {
+      "ConnectorMapping": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "connectionId": { "type": "string", "format": "uuid" },
-          "nodeId": { "type": "string", "format": "uuid" },
-          "plcAddress": { "type": "string" },
+          "nodeId": { "type": "string", "format": "uuid", "nullable": true },
+          "deviceAddress": { "type": "string" },
           "description": { "type": "string" },
           "createdAt": { "type": "string", "format": "date-time" }
         }
       },
-      "CreateS7MappingRequest": {
+      "CreateMappingRequest": {
         "type": "object",
-        "required": ["connectionId", "nodeId", "plcAddress"],
+        "required": ["connectionId", "deviceAddress"],
         "properties": {
           "connectionId": { "type": "string", "format": "uuid" },
           "nodeId": { "type": "string", "format": "uuid" },
-          "plcAddress": { "type": "string" },
+          "deviceAddress": { "type": "string" },
           "description": { "type": "string" }
         }
       },
-      "S7ConnectionStatus": {
+      "ConnectorStatus": {
         "type": "object",
         "properties": {
           "connectionId": { "type": "string", "format": "uuid" },
@@ -229,11 +270,11 @@
           "errorMessage": { "type": "string" }
         }
       },
-      "S7CurrentValue": {
+      "ConnectorCurrentValue": {
         "type": "object",
         "properties": {
-          "nodeId": { "type": "string" },
-          "plcAddress": { "type": "string" },
+          "nodeId": { "type": "string", "nullable": true },
+          "deviceAddress": { "type": "string" },
           "connectionId": { "type": "string", "format": "uuid" },
           "value": {},
           "quality": { "type": "string", "enum": ["good", "bad"] },
@@ -250,17 +291,6 @@
           "notBefore": { "type": "string", "format": "date-time" },
           "notAfter": { "type": "string", "format": "date-time" },
           "fileSize": { "type": "integer" }
-        }
-      },
-      "ClientSession": {
-        "type": "object",
-        "properties": {
-          "applicationName": { "type": "string" },
-          "applicationUri": { "type": "string" },
-          "securityPolicyUri": { "type": "string" },
-          "clientAddress": { "type": "string" },
-          "connectTime": { "type": "string", "format": "date-time" },
-          "sessionState": { "type": "string", "enum": ["Created", "Activated", "Closing"] }
         }
       },
       "LogEntry": {
@@ -295,11 +325,9 @@
       "get": {
         "tags": ["Server"],
         "summary": "Get server status",
-        "description": "Returns the current OPC UA runtime status. Unauthenticated.",
+        "description": "Returns the current OPC UA runtime status including hostname and OPC UA port. Unauthenticated.",
         "security": [],
-        "responses": {
-          "200": { "description": "Server status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServerStatus" } } } }
-        }
+        "responses": { "200": { "description": "Server status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServerStatus" } } } } }
       }
     },
     "/api/server/clients": {
@@ -308,40 +336,28 @@
         "summary": "Get connected client sessions",
         "description": "Returns per-client session details. Unauthenticated.",
         "security": [],
-        "responses": {
-          "200": { "description": "Client sessions", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ClientSession" } } } } }
-        }
+        "responses": { "200": { "description": "Client sessions", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ClientSession" } } } } } }
       }
     },
     "/api/server/start": {
       "post": {
         "tags": ["Server"],
         "summary": "Start the OPC UA runtime",
-        "responses": {
-          "200": { "description": "Runtime started", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StartServerResponse" } } } },
-          "409": { "description": "Already running", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
-        }
+        "responses": { "200": { "description": "Runtime started", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StartServerResponse" } } } }, "409": { "description": "Already running" } }
       }
     },
     "/api/server/stop": {
       "post": {
         "tags": ["Server"],
         "summary": "Stop the OPC UA runtime",
-        "responses": {
-          "200": { "description": "Runtime stopped" },
-          "409": { "description": "Not running", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
-        }
+        "responses": { "200": { "description": "Runtime stopped" }, "409": { "description": "Not running" } }
       }
     },
     "/api/server/reload": {
       "post": {
         "tags": ["Server"],
         "summary": "Reload the runtime configuration",
-        "description": "Regenerates the config file and signals the runtime to reload the address space.",
-        "responses": {
-          "200": { "description": "Config reloaded" },
-          "409": { "description": "Not running", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
-        }
+        "responses": { "200": { "description": "Config reloaded" }, "409": { "description": "Not running" } }
       }
     },
     "/api/nodes": {
@@ -349,22 +365,14 @@
         "tags": ["Nodes"],
         "summary": "List all nodes",
         "security": [],
-        "parameters": [
-          { "name": "namespaceId", "in": "query", "schema": { "type": "string" }, "description": "Filter by namespace" }
-        ],
-        "responses": {
-          "200": { "description": "Node list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OpcUaNode" } } } } }
-        }
+        "parameters": [{ "name": "namespaceId", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Node list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OpcUaNode" } } } } } }
       },
       "post": {
         "tags": ["Nodes"],
         "summary": "Create a node",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNodeRequest" } } } },
-        "responses": {
-          "201": { "description": "Node created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpcUaNode" } } } },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Duplicate name", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
-        }
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpcUaNode" } } } }, "400": { "description": "Validation error" }, "409": { "description": "Duplicate" } }
       }
     },
     "/api/nodes/{id}": {
@@ -373,286 +381,180 @@
         "summary": "Get node by ID",
         "security": [],
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "responses": {
-          "200": { "description": "Node found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpcUaNode" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
-        }
+        "responses": { "200": { "description": "Node found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpcUaNode" } } } }, "404": { "description": "Not found" } }
       },
       "put": {
         "tags": ["Nodes"],
         "summary": "Update a node",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateNodeRequest" } } } },
-        "responses": {
-          "200": { "description": "Node updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpcUaNode" } } } },
-          "400": { "description": "Validation error" },
-          "404": { "description": "Not found" },
-          "409": { "description": "Duplicate name" }
-        }
+        "responses": { "200": { "description": "Updated" }, "400": { "description": "Validation error" }, "404": { "description": "Not found" }, "409": { "description": "Duplicate" } }
       },
       "delete": {
         "tags": ["Nodes"],
         "summary": "Delete a node",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "responses": {
-          "204": { "description": "Deleted" },
-          "404": { "description": "Not found" }
-        }
+        "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
       }
     },
     "/api/nodes/export/csv": {
-      "get": {
-        "tags": ["Nodes"],
-        "summary": "Export nodes as CSV",
-        "security": [],
-        "responses": { "200": { "description": "CSV file", "content": { "text/csv": { "schema": { "type": "string" } } } } }
-      }
+      "get": { "tags": ["Nodes"], "summary": "Export nodes as CSV", "security": [], "responses": { "200": { "description": "CSV file", "content": { "text/csv": {} } } } }
     },
     "/api/nodes/import/csv": {
-      "post": {
-        "tags": ["Nodes"],
-        "summary": "Import nodes from CSV",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["csv"], "properties": { "csv": { "type": "string" } } } } } },
-        "responses": { "201": { "description": "All imported" }, "207": { "description": "Partial success" } }
-      }
+      "post": { "tags": ["Nodes"], "summary": "Import nodes from CSV", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["csv"], "properties": { "csv": { "type": "string" } } } } } }, "responses": { "201": { "description": "All imported" }, "207": { "description": "Partial success" } } }
     },
     "/api/namespaces": {
-      "get": {
-        "tags": ["Namespaces"],
-        "summary": "List all namespaces",
-        "security": [],
-        "responses": { "200": { "description": "Namespace list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Namespace" } } } } } }
-      },
-      "post": {
-        "tags": ["Namespaces"],
-        "summary": "Create a namespace",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNamespaceRequest" } } } },
-        "responses": {
-          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Namespace" } } } },
-          "400": { "description": "Validation error" },
-          "409": { "description": "Duplicate" }
-        }
-      }
+      "get": { "tags": ["Namespaces"], "summary": "List namespaces", "security": [], "responses": { "200": { "description": "Namespace list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Namespace" } } } } } } },
+      "post": { "tags": ["Namespaces"], "summary": "Create a namespace", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNamespaceRequest" } } } }, "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "409": { "description": "Duplicate" } } }
     },
     "/api/namespaces/{id}": {
-      "put": {
-        "tags": ["Namespaces"],
-        "summary": "Update a namespace",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNamespaceRequest" } } } },
-        "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } }
-      },
-      "delete": {
-        "tags": ["Namespaces"],
-        "summary": "Delete a namespace (cascades nodes)",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
-      }
+      "put": { "tags": ["Namespaces"], "summary": "Update a namespace", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNamespaceRequest" } } } }, "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } } },
+      "delete": { "tags": ["Namespaces"], "summary": "Delete namespace (cascades)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } } }
     },
     "/api/object-nodes": {
-      "post": {
-        "tags": ["Object Nodes"],
-        "summary": "Create an object node",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateObjectNodeRequest" } } } },
-        "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "409": { "description": "Duplicate" } }
-      }
+      "post": { "tags": ["Object Nodes"], "summary": "Create an object node", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateObjectNodeRequest" } } } }, "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "409": { "description": "Duplicate" } } }
     },
     "/api/object-nodes/{id}": {
-      "delete": {
-        "tags": ["Object Nodes"],
-        "summary": "Delete an object node",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
-      }
+      "delete": { "tags": ["Object Nodes"], "summary": "Delete an object node", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } } }
     },
     "/api/security": {
-      "get": {
-        "tags": ["Security"],
-        "summary": "Get security configuration",
-        "security": [],
-        "responses": { "200": { "description": "Security config", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecurityConfig" } } } } }
-      }
+      "get": { "tags": ["Security"], "summary": "Get security configuration", "security": [], "responses": { "200": { "description": "Security config", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecurityConfig" } } } } } }
     },
     "/api/security/policy": {
-      "put": {
-        "tags": ["Security"],
-        "summary": "Update security mode",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateSecurityPolicyRequest" } } } },
-        "responses": { "200": { "description": "Updated" }, "400": { "description": "Invalid mode" } }
-      }
+      "put": { "tags": ["Security"], "summary": "Update security mode", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateSecurityPolicyRequest" } } } }, "responses": { "200": { "description": "Updated" }, "400": { "description": "Invalid mode" } } }
     },
     "/api/security/certificate": {
-      "post": {
-        "tags": ["Security"],
-        "summary": "Upload certificate paths",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["certificatePath", "privateKeyPath"], "properties": { "certificatePath": { "type": "string" }, "privateKeyPath": { "type": "string" } } } } } },
-        "responses": { "200": { "description": "Paths stored" }, "400": { "description": "Invalid format" } }
-      }
+      "post": { "tags": ["Security"], "summary": "Upload certificate paths", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["certificatePath", "privateKeyPath"], "properties": { "certificatePath": { "type": "string" }, "privateKeyPath": { "type": "string" } } } } } }, "responses": { "200": { "description": "Paths stored" }, "400": { "description": "Invalid format" } } }
     },
     "/api/security/generate": {
-      "post": {
-        "tags": ["Security"],
-        "summary": "Generate self-signed certificate",
-        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenerateCertificateRequest" } } } },
-        "responses": { "201": { "description": "Generated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecurityConfig" } } } }, "400": { "description": "Already exists or validation error" } }
-      }
+      "post": { "tags": ["Security"], "summary": "Generate self-signed certificate", "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenerateCertificateRequest" } } } }, "responses": { "201": { "description": "Generated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecurityConfig" } } } }, "400": { "description": "Already exists" } } }
     },
     "/api/security/certificate/download": {
+      "get": { "tags": ["Security"], "summary": "Download server certificate", "security": [], "parameters": [{ "name": "format", "in": "query", "schema": { "type": "string", "enum": ["der", "pem"], "default": "der" } }], "responses": { "200": { "description": "Certificate file" }, "404": { "description": "No certificate" } } }
+    },
+    "/api/connectors/protocols": {
       "get": {
-        "tags": ["Security"],
-        "summary": "Download server certificate",
+        "tags": ["Connectors"],
+        "summary": "List available protocol plugins",
+        "description": "Returns metadata and parameter schemas for all discovered connector plugins. Unauthenticated.",
         "security": [],
-        "parameters": [{ "name": "format", "in": "query", "schema": { "type": "string", "enum": ["der", "pem"], "default": "der" } }],
-        "responses": { "200": { "description": "Certificate file" }, "404": { "description": "No certificate configured" } }
+        "responses": { "200": { "description": "Protocol metadata array", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ConnectorMetadata" } } } } } }
       }
     },
-    "/api/s7/connections": {
+    "/api/connectors/connections": {
       "get": {
-        "tags": ["S7"],
-        "summary": "List S7 connections",
+        "tags": ["Connectors"],
+        "summary": "List connections",
         "security": [],
-        "responses": { "200": { "description": "Connection list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/S7Connection" } } } } } }
+        "parameters": [{ "name": "type", "in": "query", "schema": { "type": "string" }, "description": "Filter by protocol type" }],
+        "responses": { "200": { "description": "Connection list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ConnectorConnection" } } } } } }
       },
       "post": {
-        "tags": ["S7"],
-        "summary": "Create an S7 connection",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateS7ConnectionRequest" } } } },
-        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/S7Connection" } } } }, "400": { "description": "Validation error" } }
+        "tags": ["Connectors"],
+        "summary": "Create a connection",
+        "description": "Creates a connection for any protocol type. Params are validated against the protocol's paramsSchema if available.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateConnectionRequest" } } } },
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConnectorConnection" } } } }, "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }, "409": { "description": "Duplicate" } }
       }
     },
-    "/api/s7/connections/{id}": {
+    "/api/connectors/connections/{id}": {
       "put": {
-        "tags": ["S7"],
-        "summary": "Update an S7 connection",
+        "tags": ["Connectors"],
+        "summary": "Update a connection",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "name": {"type":"string"}, "host": {"type":"string"}, "rack": {"type":"integer"}, "slot": {"type":"integer"}, "pollingIntervalMs": {"type":"integer"}, "reconnectIntervalMs": {"type":"integer"}, "enabled": {"type":"boolean"} } } } } },
-        "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } }
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "name": {"type":"string"}, "params": {"type":"object"}, "pollingIntervalMs": {"type":"integer"}, "reconnectIntervalMs": {"type":"integer"}, "enabled": {"type":"boolean"} } } } } },
+        "responses": { "200": { "description": "Updated" }, "400": { "description": "Validation error" }, "404": { "description": "Not found" } }
       },
       "delete": {
-        "tags": ["S7"],
-        "summary": "Delete an S7 connection",
+        "tags": ["Connectors"],
+        "summary": "Delete a connection (cascades mappings)",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
         "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
       }
     },
-    "/api/s7/mappings": {
+    "/api/connectors/mappings": {
       "get": {
-        "tags": ["S7"],
-        "summary": "List S7 mappings",
+        "tags": ["Connectors"],
+        "summary": "List mappings",
         "security": [],
-        "parameters": [{ "name": "connectionId", "in": "query", "schema": { "type": "string" }, "description": "Filter by connection" }],
-        "responses": { "200": { "description": "Mapping list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/S7Mapping" } } } } } }
+        "parameters": [{ "name": "connectionId", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Mapping list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ConnectorMapping" } } } } } }
       },
       "post": {
-        "tags": ["S7"],
-        "summary": "Create an S7 mapping",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateS7MappingRequest" } } } },
-        "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "404": { "description": "Connection or node not found" }, "409": { "description": "Duplicate" } }
+        "tags": ["Connectors"],
+        "summary": "Create a mapping",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateMappingRequest" } } } },
+        "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "404": { "description": "Connection not found" }, "409": { "description": "Duplicate" } }
       }
     },
-    "/api/s7/mappings/{id}": {
+    "/api/connectors/mappings/{id}": {
       "put": {
-        "tags": ["S7"],
-        "summary": "Update an S7 mapping",
+        "tags": ["Connectors"],
+        "summary": "Update a mapping",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "plcAddress": {"type":"string"}, "nodeId": {"type":"string"}, "description": {"type":"string"} } } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "deviceAddress": {"type":"string"}, "nodeId": {"type":"string"}, "description": {"type":"string"} } } } } },
         "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } }
       },
       "delete": {
-        "tags": ["S7"],
-        "summary": "Delete an S7 mapping",
+        "tags": ["Connectors"],
+        "summary": "Delete a mapping",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
         "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
       }
     },
-    "/api/s7/mappings/bulk": {
+    "/api/connectors/mappings/bulk": {
       "post": {
-        "tags": ["S7"],
-        "summary": "Bulk create S7 mappings",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CreateS7MappingRequest" } } } } },
+        "tags": ["Connectors"],
+        "summary": "Bulk create mappings",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CreateMappingRequest" } } } } },
         "responses": { "201": { "description": "All created" }, "207": { "description": "Partial success" } }
       }
     },
-    "/api/s7/mappings/export/csv": {
+    "/api/connectors/mappings/export/csv": {
+      "get": { "tags": ["Connectors"], "summary": "Export mappings as CSV", "security": [], "responses": { "200": { "description": "CSV file", "content": { "text/csv": {} } } } }
+    },
+    "/api/connectors/mappings/import/csv": {
+      "post": { "tags": ["Connectors"], "summary": "Import mappings from CSV", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["csv"], "properties": { "csv": { "type": "string" } } } } } }, "responses": { "201": { "description": "All imported" }, "207": { "description": "Partial success" } } }
+    },
+    "/api/connectors/status": {
       "get": {
-        "tags": ["S7"],
-        "summary": "Export S7 mappings as CSV",
+        "tags": ["Connectors"],
+        "summary": "Get all connection statuses",
         "security": [],
-        "responses": { "200": { "description": "CSV file", "content": { "text/csv": { "schema": { "type": "string" } } } } }
+        "responses": { "200": { "description": "Status list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ConnectorStatus" } } } } } }
       }
     },
-    "/api/s7/mappings/import/csv": {
-      "post": {
-        "tags": ["S7"],
-        "summary": "Import S7 mappings from CSV",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["csv"], "properties": { "csv": { "type": "string" } } } } } },
-        "responses": { "201": { "description": "All imported" }, "207": { "description": "Partial success" } }
-      }
-    },
-    "/api/s7/status": {
+    "/api/connectors/values": {
       "get": {
-        "tags": ["S7"],
-        "summary": "Get S7 connection statuses",
+        "tags": ["Connectors"],
+        "summary": "Get current live values",
         "security": [],
-        "responses": { "200": { "description": "Status list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/S7ConnectionStatus" } } } } } }
-      }
-    },
-    "/api/s7/values": {
-      "get": {
-        "tags": ["S7"],
-        "summary": "Get current live PLC values",
-        "security": [],
-        "responses": { "200": { "description": "Live values", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/S7CurrentValue" } } } } } }
-      }
-    },
-    "/api/s7/logs": {
-      "get": {
-        "tags": ["S7"],
-        "summary": "Get S7 connector logs",
-        "security": [],
-        "parameters": [{ "name": "since", "in": "query", "schema": { "type": "string" }, "description": "ISO timestamp filter" }],
-        "responses": { "200": { "description": "Log entries" } }
+        "responses": { "200": { "description": "Live values", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ConnectorCurrentValue" } } } } } }
       }
     },
     "/api/pki/certificates": {
-      "get": {
-        "tags": ["PKI"],
-        "summary": "List all client certificates",
-        "security": [],
-        "responses": { "200": { "description": "Certificate list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CertificateInfo" } } } } } }
-      }
+      "get": { "tags": ["PKI"], "summary": "List all client certificates", "security": [], "responses": { "200": { "description": "Certificate list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CertificateInfo" } } } } } } }
     },
     "/api/pki/certificates/{thumbprint}/reject": {
-      "post": {
-        "tags": ["PKI"],
-        "summary": "Reject a trusted certificate",
-        "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }],
-        "responses": { "204": { "description": "Rejected" }, "400": { "description": "Invalid thumbprint" }, "404": { "description": "Not found in trust store" } }
-      }
+      "post": { "tags": ["PKI"], "summary": "Reject a trusted certificate", "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }], "responses": { "204": { "description": "Rejected" }, "400": { "description": "Invalid thumbprint" }, "404": { "description": "Not found" } } }
     },
     "/api/pki/certificates/{thumbprint}/trust": {
-      "post": {
-        "tags": ["PKI"],
-        "summary": "Re-trust a rejected certificate",
-        "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }],
-        "responses": { "204": { "description": "Trusted" }, "404": { "description": "Not found in reject store" }, "409": { "description": "Already trusted" } }
-      }
+      "post": { "tags": ["PKI"], "summary": "Re-trust a rejected certificate", "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }], "responses": { "204": { "description": "Trusted" }, "404": { "description": "Not found" }, "409": { "description": "Already trusted" } } }
     },
     "/api/pki/certificates/{thumbprint}": {
-      "delete": {
-        "tags": ["PKI"],
-        "summary": "Delete a certificate permanently",
-        "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }],
-        "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
+      "delete": { "tags": ["PKI"], "summary": "Delete a certificate", "parameters": [{ "name": "thumbprint", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{40}$" } }], "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } } }
+    },
+    "/api/events": {
+      "get": {
+        "tags": ["Events"],
+        "summary": "Server-Sent Events stream",
+        "description": "Multiplexed SSE stream for real-time updates (server:status, server:clients, connector:status, connector:values, log:entry). Unauthenticated.",
+        "security": [],
+        "responses": { "200": { "description": "SSE stream", "content": { "text/event-stream": {} } } }
       }
     },
     "/api/files/browse": {
-      "post": {
-        "tags": ["Files"],
-        "summary": "Browse server filesystem",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" }, "extensions": { "type": "array", "items": { "type": "string" } } } } } } },
-        "responses": { "200": { "description": "File listing" } }
-      }
+      "post": { "tags": ["Files"], "summary": "Browse server filesystem", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" }, "extensions": { "type": "array", "items": { "type": "string" } } } } } } }, "responses": { "200": { "description": "File listing" } } }
     },
     "/api/logs": {
       "get": {
