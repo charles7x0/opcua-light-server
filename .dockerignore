@@ -1,0 +1,29 @@
+﻿# Dependencies (rebuilt inside Docker)
+node_modules/
+web/node_modules/
+
+# Build outputs (rebuilt inside Docker)
+dist/
+web/dist/
+runtime/build/
+runtime/opcua-runtime
+runtime/opcua-runtime.exe
+
+# Development files
+.git/
+.kiro/
+.env
+.env.local
+*.db
+*.sqlite
+coverage/
+tests/
+benchmark_*.csv
+old_script/
+
+# IDE/OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
