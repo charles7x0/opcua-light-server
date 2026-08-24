@@ -2,7 +2,7 @@
 # OPC UA Light Server — Multi-stage Dockerfile
 # Optimized for minimal image size and runtime memory usage.
 #
-# Final image: ~120-150 MB (Alpine + Node.js + compiled C binary + production deps)
+# Final image: ~200-250 MB (Alpine + Node.js + compiled C binary + production deps)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -14,6 +14,7 @@ RUN apk add --no-cache \
     build-base \
     cmake \
     git \
+    python3 \
     openssl-dev \
     linux-headers
 
@@ -25,8 +26,10 @@ COPY runtime/include/ ./include/
 COPY runtime/src/ ./src/
 
 # Build with Release optimizations and strip symbols
-RUN mkdir build && cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Os" && \
+# Disable git SSL verification (workaround for corporate proxies intercepting TLS)
+RUN git config --global http.sslVerify false && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Os -D_POSIX_C_SOURCE=200809L" && \
     cmake --build . --parallel  && \
     strip /build/runtime/opcua-runtime
 
@@ -39,7 +42,7 @@ WORKDIR /build
 
 # Install only production + build deps (leverage layer caching)
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 npm ci --ignore-scripts
 
 # Copy source and compile
 COPY tsconfig.json ./
@@ -56,10 +59,10 @@ WORKDIR /build/web
 
 # Install web dependencies
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 npm ci
 
 # Copy web source and build
-COPY web/tsconfig.json web/tsconfig.node.json ./
+COPY web/tsconfig.json ./
 COPY web/vite.config.ts web/tailwind.config.js web/postcss.config.js ./
 COPY web/index.html ./
 COPY web/src/ ./src/
@@ -71,13 +74,19 @@ RUN npm run build
 # ═══════════════════════════════════════════════════════════════════════════════
 FROM node:22-alpine AS deps
 
+# Python + build tools needed to compile better-sqlite3 (native C++ addon)
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 
 # Install ONLY production deps, rebuild native modules (better-sqlite3)
-RUN npm ci --omit=dev && \
-    npm cache clean --force
+# NODE_TLS: workaround for corporate proxies intercepting TLS
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 npm ci --omit=dev && \
+    npm cache clean --force && \
+    apk del python3 make g++ && \
+    rm -rf /root/.npm /tmp/*
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Stage 5: Final production image
@@ -100,6 +109,9 @@ COPY --from=runtime-builder /build/runtime/opcua-runtime ./runtime/opcua-runtime
 
 # Copy compiled Node.js backend
 COPY --from=api-builder /build/dist/ ./dist/
+
+# Copy non-TS assets that the backend reads at runtime
+COPY src/db/schema.sql ./dist/db/schema.sql
 
 # Copy compiled web UI
 COPY --from=web-builder /build/web/dist/ ./web/dist/
