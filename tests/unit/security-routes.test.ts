@@ -3,6 +3,8 @@ import express, { type Express } from 'express';
 import { Database } from '../../src/db/database.js';
 import { SecurityRepository } from '../../src/db/repositories/security-repository.js';
 import { createSecurityRouter } from '../../src/api/routes/security.js';
+import { existsSync } from 'fs';
+import { generateCertificate, readCertificateExpiry } from '../../src/cert-generator/index.js';
 
 // Mock fs module for controlling existsSync in generate tests
 vi.mock('fs', async (importOriginal) => {
@@ -22,9 +24,6 @@ vi.mock('../../src/cert-generator/index.js', async (importOriginal) => {
     readCertificateExpiry: vi.fn(() => null),
   };
 });
-
-import { existsSync } from 'fs';
-import { generateCertificate, readCertificateExpiry } from '../../src/cert-generator/index.js';
 
 /**
  * Helper to make requests to the Express app without a real HTTP server.
@@ -178,6 +177,104 @@ describe('Security API Routes', () => {
 
       const config = securityRepo.get();
       expect(config.mode).toBe('SignAndEncrypt');
+    });
+
+    describe('runtime restart on policy change', () => {
+      let mockProcessManager: {
+        getStatus: ReturnType<typeof vi.fn>;
+        stop: ReturnType<typeof vi.fn>;
+        start: ReturnType<typeof vi.fn>;
+      };
+      let mockConfigGenerator: {
+        writeToFile: ReturnType<typeof vi.fn>;
+      };
+      let appWithDeps: Express;
+
+      beforeEach(() => {
+        mockProcessManager = {
+          getStatus: vi.fn().mockReturnValue({ state: 'running', pid: 1234 }),
+          stop: vi.fn().mockResolvedValue(undefined),
+          start: vi.fn().mockResolvedValue({ pid: 5678, startedAt: new Date() }),
+        };
+        mockConfigGenerator = {
+          writeToFile: vi.fn(),
+        };
+        appWithDeps = express();
+        appWithDeps.use(express.json());
+        appWithDeps.use('/api/security', createSecurityRouter(securityRepo, {
+          processManager: mockProcessManager as any,
+          configGenerator: mockConfigGenerator as any,
+        }));
+      });
+
+      it('should restart the runtime when mode changes and runtime is running', async () => {
+        const res = await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        expect(res.status).toBe(200);
+        expect(mockConfigGenerator.writeToFile).toHaveBeenCalledWith('runtime/config.json');
+        expect(mockProcessManager.stop).toHaveBeenCalled();
+        expect(mockProcessManager.start).toHaveBeenCalled();
+      });
+
+      it('should call stop before start (correct order)', async () => {
+        const callOrder: string[] = [];
+        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('stop'); });
+        mockProcessManager.start.mockImplementation(async () => { callOrder.push('start'); return { pid: 5678, startedAt: new Date() }; });
+
+        await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'Sign' });
+
+        expect(callOrder).toEqual(['stop', 'start']);
+      });
+
+      it('should regenerate config before stopping the runtime', async () => {
+        const callOrder: string[] = [];
+        mockConfigGenerator.writeToFile.mockImplementation(() => { callOrder.push('writeConfig'); });
+        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('stop'); });
+        mockProcessManager.start.mockImplementation(async () => { callOrder.push('start'); return { pid: 5678, startedAt: new Date() }; });
+
+        await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        expect(callOrder).toEqual(['writeConfig', 'stop', 'start']);
+      });
+
+      it('should NOT restart if runtime is not running', async () => {
+        mockProcessManager.getStatus.mockReturnValue({ state: 'stopped' });
+
+        const res = await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        expect(res.status).toBe(200);
+        expect(mockProcessManager.stop).not.toHaveBeenCalled();
+        expect(mockProcessManager.start).not.toHaveBeenCalled();
+        expect(mockConfigGenerator.writeToFile).not.toHaveBeenCalled();
+      });
+
+      it('should NOT restart if no processManager is provided', async () => {
+        // Use the app without deps (original app from outer beforeEach)
+        const res = await request(app, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        expect(res.status).toBe(200);
+        // No crash — graceful degradation when processManager is not available
+      });
+
+      it('should still return success even if restart fails', async () => {
+        mockProcessManager.stop.mockRejectedValue(new Error('stop failed'));
+
+        const res = await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        // Policy was persisted successfully even if restart fails
+        expect(res.status).toBe(200);
+        const body = res.body as Record<string, unknown>;
+        expect(body.mode).toBe('SignAndEncrypt');
+      });
+
+      it('should persist the new mode regardless of restart outcome', async () => {
+        mockProcessManager.stop.mockRejectedValue(new Error('stop failed'));
+
+        await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'Sign' });
+
+        const config = securityRepo.get();
+        expect(config.mode).toBe('Sign');
+      });
     });
   });
 
