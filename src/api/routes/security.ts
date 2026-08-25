@@ -16,21 +16,25 @@ import { derToPem } from '../../cert-generator/cert-utils.js';
 import type { ErrorResponse, UpdateSecurityPolicyRequest, UploadCertificateRequest, GenerateCertificateRequest } from '../../types/api.js';
 import type { ProcessManager } from '../../process-manager/index.js';
 import type { ConfigGenerator } from '../../config-generator/index.js';
+import type { ConnectorRegistry } from '../../connectors/core/connector-registry.js';
 import { logService } from '../../log/index.js';
 import { networkInterfaces } from 'os';
 
 export interface SecurityRouterDeps {
-  securityRepo: SecurityRepository;
   processManager?: ProcessManager;
   configGenerator?: ConfigGenerator;
+  connectorRegistry?: ConnectorRegistry;
+  configFilePath?: string;
 }
 
 /**
  * Creates the security router with the given dependencies.
  */
-export function createSecurityRouter(securityRepo: SecurityRepository, deps?: { processManager?: ProcessManager; configGenerator?: ConfigGenerator }): Router {
+export function createSecurityRouter(securityRepo: SecurityRepository, deps?: SecurityRouterDeps): Router {
   const processManager = deps?.processManager;
   const configGenerator = deps?.configGenerator;
+  const connectorRegistry = deps?.connectorRegistry;
+  const configFilePath = deps?.configFilePath ?? 'runtime/config.json';
   const router = Router();
 
   /**
@@ -192,9 +196,16 @@ export function createSecurityRouter(securityRepo: SecurityRepository, deps?: { 
         const status = processManager.getStatus();
         if (status.state === 'running') {
           try {
-            configGenerator.writeToFile('runtime/config.json');
+            // Stop connectors before runtime shutdown
+            connectorRegistry?.stopAll();
+
+            configGenerator.writeToFile(configFilePath);
             await processManager.stop();
             await processManager.start();
+
+            // Restart connectors after runtime is back up
+            connectorRegistry?.startAll();
+
             logService.info('Security', `Runtime restarted after security mode change to "${body.mode}"`);
           } catch (err) {
             logService.warn('Security', `Failed to restart runtime after policy change: ${(err as Error).message}`);

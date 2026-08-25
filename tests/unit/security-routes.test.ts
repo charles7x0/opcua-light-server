@@ -188,6 +188,10 @@ describe('Security API Routes', () => {
       let mockConfigGenerator: {
         writeToFile: ReturnType<typeof vi.fn>;
       };
+      let mockConnectorRegistry: {
+        stopAll: ReturnType<typeof vi.fn>;
+        startAll: ReturnType<typeof vi.fn>;
+      };
       let appWithDeps: Express;
 
       beforeEach(() => {
@@ -199,11 +203,16 @@ describe('Security API Routes', () => {
         mockConfigGenerator = {
           writeToFile: vi.fn(),
         };
+        mockConnectorRegistry = {
+          stopAll: vi.fn(),
+          startAll: vi.fn(),
+        };
         appWithDeps = express();
         appWithDeps.use(express.json());
         appWithDeps.use('/api/security', createSecurityRouter(securityRepo, {
           processManager: mockProcessManager as any,
           configGenerator: mockConfigGenerator as any,
+          connectorRegistry: mockConnectorRegistry as any,
         }));
       });
 
@@ -216,25 +225,33 @@ describe('Security API Routes', () => {
         expect(mockProcessManager.start).toHaveBeenCalled();
       });
 
-      it('should call stop before start (correct order)', async () => {
+      it('should stop connectors before runtime shutdown and restart after', async () => {
         const callOrder: string[] = [];
-        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('stop'); });
-        mockProcessManager.start.mockImplementation(async () => { callOrder.push('start'); return { pid: 5678, startedAt: new Date() }; });
+        mockConnectorRegistry.stopAll.mockImplementation(() => { callOrder.push('connectors:stop'); });
+        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('runtime:stop'); });
+        mockProcessManager.start.mockImplementation(async () => { callOrder.push('runtime:start'); return { pid: 5678, startedAt: new Date() }; });
+        mockConnectorRegistry.startAll.mockImplementation(() => { callOrder.push('connectors:start'); });
 
-        await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'Sign' });
+        await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
 
-        expect(callOrder).toEqual(['stop', 'start']);
+        expect(callOrder).toEqual(['connectors:stop', 'runtime:stop', 'runtime:start', 'connectors:start']);
       });
 
       it('should regenerate config before stopping the runtime', async () => {
         const callOrder: string[] = [];
         mockConfigGenerator.writeToFile.mockImplementation(() => { callOrder.push('writeConfig'); });
-        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('stop'); });
-        mockProcessManager.start.mockImplementation(async () => { callOrder.push('start'); return { pid: 5678, startedAt: new Date() }; });
+        mockConnectorRegistry.stopAll.mockImplementation(() => { callOrder.push('connectors:stop'); });
+        mockProcessManager.stop.mockImplementation(async () => { callOrder.push('runtime:stop'); });
+        mockProcessManager.start.mockImplementation(async () => { callOrder.push('runtime:start'); return { pid: 5678, startedAt: new Date() }; });
+        mockConnectorRegistry.startAll.mockImplementation(() => { callOrder.push('connectors:start'); });
 
         await request(appWithDeps, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
 
-        expect(callOrder).toEqual(['writeConfig', 'stop', 'start']);
+        expect(callOrder[0]).toBe('connectors:stop');
+        expect(callOrder[1]).toBe('writeConfig');
+        expect(callOrder[2]).toBe('runtime:stop');
+        expect(callOrder[3]).toBe('runtime:start');
+        expect(callOrder[4]).toBe('connectors:start');
       });
 
       it('should NOT restart if runtime is not running', async () => {
@@ -246,6 +263,8 @@ describe('Security API Routes', () => {
         expect(mockProcessManager.stop).not.toHaveBeenCalled();
         expect(mockProcessManager.start).not.toHaveBeenCalled();
         expect(mockConfigGenerator.writeToFile).not.toHaveBeenCalled();
+        expect(mockConnectorRegistry.stopAll).not.toHaveBeenCalled();
+        expect(mockConnectorRegistry.startAll).not.toHaveBeenCalled();
       });
 
       it('should NOT restart if no processManager is provided', async () => {
@@ -274,6 +293,20 @@ describe('Security API Routes', () => {
 
         const config = securityRepo.get();
         expect(config.mode).toBe('Sign');
+      });
+
+      it('should use custom configFilePath when provided', async () => {
+        const customApp = express();
+        customApp.use(express.json());
+        customApp.use('/api/security', createSecurityRouter(securityRepo, {
+          processManager: mockProcessManager as any,
+          configGenerator: mockConfigGenerator as any,
+          configFilePath: '/custom/path/config.json',
+        }));
+
+        await request(customApp, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+        expect(mockConfigGenerator.writeToFile).toHaveBeenCalledWith('/custom/path/config.json');
       });
     });
   });

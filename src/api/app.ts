@@ -133,7 +133,7 @@ export function createApp(deps: AppDependencies): AppInstance {
   app.use('/api', objectNodeRouter);
 
   app.use('/api/server', createServerRouter({ processManager, configGenerator, connectorRegistry, opcuaPort }));
-  app.use('/api/security', createSecurityRouter(securityRepo, { processManager, configGenerator }));
+  app.use('/api/security', createSecurityRouter(securityRepo, { processManager, configGenerator, connectorRegistry }));
   app.use('/api/connectors', createConnectorsRouter(connectorRepo, connectorRegistry, database));
   app.use('/api/files', createFileRouter());
   app.use('/api/pki/certificates', createPkiRouter(tofuManager));

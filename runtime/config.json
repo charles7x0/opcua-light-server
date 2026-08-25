@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-25T17:09:32.332Z",
+  "security": {
+    "mode": "None"
+  },
+  "namespaces": [
+    {
+      "name": "GrupoMoura",
+      "uri": "opcua-light:GrupoMoura",
+      "objectNodes": [
+        {
+          "name": "SLR01",
+          "path": "GrupoMoura.SLR01",
+          "children": []
+        }
+      ],
+      "nodes": [
+        {
+          "name": "Rockwell",
+          "nodeId": "ns=2;s=GrupoMoura.SLR01.Rockwell",
+          "dataType": "Double",
+          "parentPath": "GrupoMoura.SLR01",
+          "connectorMapping": {
+            "connectionType": "ethernet-ip",
+            "connectionHost": "10.1.24.34",
+            "deviceAddress": "Temperature"
+          }
+        }
+      ]
+    }
+  ]
+}
