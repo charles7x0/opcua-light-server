@@ -14,12 +14,23 @@ import { generateCertificate } from '../../cert-generator/index.js';
 import { validateGenerateRequest } from '../../cert-generator/validation.js';
 import { derToPem } from '../../cert-generator/cert-utils.js';
 import type { ErrorResponse, UpdateSecurityPolicyRequest, UploadCertificateRequest, GenerateCertificateRequest } from '../../types/api.js';
+import type { ProcessManager } from '../../process-manager/index.js';
+import type { ConfigGenerator } from '../../config-generator/index.js';
+import { logService } from '../../log/index.js';
 import { networkInterfaces } from 'os';
 
+export interface SecurityRouterDeps {
+  securityRepo: SecurityRepository;
+  processManager?: ProcessManager;
+  configGenerator?: ConfigGenerator;
+}
+
 /**
- * Creates the security router with the given SecurityRepository instance.
+ * Creates the security router with the given dependencies.
  */
-export function createSecurityRouter(securityRepo: SecurityRepository): Router {
+export function createSecurityRouter(securityRepo: SecurityRepository, deps?: { processManager?: ProcessManager; configGenerator?: ConfigGenerator }): Router {
+  const processManager = deps?.processManager;
+  const configGenerator = deps?.configGenerator;
   const router = Router();
 
   /**
@@ -142,7 +153,7 @@ export function createSecurityRouter(securityRepo: SecurityRepository): Router {
    * PUT /api/security/policy
    * Updates the security mode (None, Sign, SignAndEncrypt).
    */
-  router.put('/policy', (req: Request, res: Response): void => {
+  router.put('/policy', async (req: Request, res: Response): Promise<void> => {
     try {
       const body = req.body as UpdateSecurityPolicyRequest;
 
@@ -174,6 +185,23 @@ export function createSecurityRouter(securityRepo: SecurityRepository): Router {
       }
 
       const config = securityRepo.updatePolicy(body.mode);
+
+      // Security mode changes require a full runtime restart because
+      // open62541 endpoint filtering is only applied at server creation time.
+      if (processManager && configGenerator) {
+        const status = processManager.getStatus();
+        if (status.state === 'running') {
+          try {
+            configGenerator.writeToFile('runtime/config.json');
+            await processManager.stop();
+            await processManager.start();
+            logService.info('Security', `Runtime restarted after security mode change to "${body.mode}"`);
+          } catch (err) {
+            logService.warn('Security', `Failed to restart runtime after policy change: ${(err as Error).message}`);
+          }
+        }
+      }
+
       res.json(config);
     } catch (err) {
       const errorResponse: ErrorResponse = {

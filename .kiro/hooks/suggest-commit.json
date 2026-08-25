@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Suggest commit message after changes",
+      "trigger": "Stop",
+      "description": "After agent execution completes, prompts Kiro to suggest a conventional commit message and PowerShell git command for the modified files.",
+      "action": {
+        "type": "agent",
+        "prompt": "If any files were modified during this session, generate a conventional commit message (type(scope): description) and provide the full PowerShell git command (git add + git commit) ready to copy-paste. Use the workspace root as the working directory. Do not execute the command — only display it in the chat."
+      }
+    }
+  ]
+}
