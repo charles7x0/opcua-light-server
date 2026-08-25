@@ -18,7 +18,8 @@
     "stress:variables": "tsx tests/stress/stress-variables.ts",
     "stress:churn": "tsx tests/stress/stress-churn.ts",
     "stress:combined": "tsx tests/stress/stress-combined.ts",
-    "stress:benchmark": "tsx tests/stress/benchmark.ts"
+    "stress:benchmark": "tsx tests/stress/benchmark.ts",
+    "reset": "node scripts/reset-data.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

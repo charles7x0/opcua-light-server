@@ -91,6 +91,9 @@ npm test
 npm run test:unit         # Unit tests
 npm run test:property     # Property-based tests (fast-check)
 npm run test:integration  # Integration tests
+
+# Reset runtime data (database, certificates, PKI store)
+npm run reset
 ```
 
 ## Docker
