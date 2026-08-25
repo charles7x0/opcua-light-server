@@ -15,6 +15,10 @@
 #include <openssl/evp.h>
 #include <string.h>
 
+/* Security policy URI for "None" — used to filter it out in SignAndEncrypt mode */
+static const UA_String UA_SECURITY_POLICY_NONE_URI_LOCAL =
+    {47, (UA_Byte *)"http://opcfoundation.org/UA/SecurityPolicy#None"};
+
 /* ─── PEM-to-DER Conversion ────────────────────────────────────────────────── */
 
 /**
@@ -230,6 +234,24 @@ int security_configure(RuntimeContext *ctx, cJSON *security_json) {
      * but Sign/SignAndEncrypt endpoints are also available. */
     if (strcmp(mode, "SignAndEncrypt") == 0) {
         UA_ServerConfig *config = UA_Server_getConfig(server);
+
+        /* Remove the None security policy so it cannot be negotiated at all */
+        size_t new_policy_count = 0;
+        for (size_t i = 0; i < config->securityPoliciesSize; i++) {
+            if (!UA_String_equal(&config->securityPolicies[i].policyUri,
+                                 &UA_SECURITY_POLICY_NONE_URI_LOCAL)) {
+                if (new_policy_count != i) {
+                    config->securityPolicies[new_policy_count] = config->securityPolicies[i];
+                }
+                new_policy_count++;
+            } else {
+                if (config->securityPolicies[i].clear) {
+                    config->securityPolicies[i].clear(&config->securityPolicies[i]);
+                }
+            }
+        }
+        config->securityPoliciesSize = new_policy_count;
+
         /* Remove endpoints with SecurityMode == None */
         size_t new_count = 0;
         for (size_t i = 0; i < config->endpointsSize; i++) {
@@ -243,7 +265,7 @@ int security_configure(RuntimeContext *ctx, cJSON *security_json) {
             }
         }
         config->endpointsSize = new_count;
-        LOG_INFO("Removed None endpoints (%zu secure endpoint(s) remaining)", new_count);
+        LOG_INFO("Removed None security policy and endpoints (%zu secure endpoint(s) remaining)", new_count);
     } else if (strcmp(mode, "Sign") == 0) {
         /* For Sign mode, remove SignAndEncrypt endpoints but keep Sign and None.
          * This allows clients to connect with at least message signing. */
