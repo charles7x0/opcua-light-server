@@ -137,6 +137,11 @@ describe('Security API Routes', () => {
 
   describe('PUT /api/security/policy', () => {
     it('should update security mode to Sign', async () => {
+      // Configure certificate first (required for non-None modes)
+      const conn = db.getConnection();
+      conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+      db.updateCache('security_config', []);
+
       const res = await request(app, 'PUT', '/api/security/policy', { mode: 'Sign' });
 
       expect(res.status).toBe(200);
@@ -145,6 +150,11 @@ describe('Security API Routes', () => {
     });
 
     it('should update security mode to SignAndEncrypt', async () => {
+      // Configure certificate first (required for non-None modes)
+      const conn = db.getConnection();
+      conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+      db.updateCache('security_config', []);
+
       const res = await request(app, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
 
       expect(res.status).toBe(200);
@@ -172,7 +182,57 @@ describe('Security API Routes', () => {
       expect(body.error.message).toContain('Invalid security mode');
     });
 
+    it('should return 400 when setting Sign without certificate configured', async () => {
+      const res = await request(app, 'PUT', '/api/security/policy', { mode: 'Sign' });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; message: string; details?: Array<{ field: string }> } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.message).toContain('requires a certificate');
+    });
+
+    it('should return 400 when setting SignAndEncrypt without certificate configured', async () => {
+      const res = await request(app, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { error: { code: string; message: string; details?: Array<{ field: string }> } };
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(body.error.message).toContain('requires a certificate');
+      expect(body.error.details).toContainEqual(expect.objectContaining({ field: 'certificatePath' }));
+    });
+
+    it('should allow setting Sign when certificate is configured', async () => {
+      // Configure certificate paths first
+      const conn = db.getConnection();
+      conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+      db.updateCache('security_config', []);
+
+      const res = await request(app, 'PUT', '/api/security/policy', { mode: 'Sign' });
+
+      expect(res.status).toBe(200);
+      const body = res.body as Record<string, unknown>;
+      expect(body.mode).toBe('Sign');
+    });
+
+    it('should allow setting SignAndEncrypt when certificate is configured', async () => {
+      // Configure certificate paths first
+      const conn = db.getConnection();
+      conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+      db.updateCache('security_config', []);
+
+      const res = await request(app, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
+
+      expect(res.status).toBe(200);
+      const body = res.body as Record<string, unknown>;
+      expect(body.mode).toBe('SignAndEncrypt');
+    });
+
     it('should persist the mode change', async () => {
+      // Configure certificate first
+      const conn = db.getConnection();
+      conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+      db.updateCache('security_config', []);
+
       await request(app, 'PUT', '/api/security/policy', { mode: 'SignAndEncrypt' });
 
       const config = securityRepo.get();
@@ -207,6 +267,12 @@ describe('Security API Routes', () => {
           stopAll: vi.fn(),
           startAll: vi.fn(),
         };
+
+        // Configure certificate so non-None modes are accepted
+        const conn = db.getConnection();
+        conn.prepare("UPDATE security_config SET certificate_path = '/certs/server.der', private_key_path = '/certs/server.key' WHERE id = 1").run();
+        db.updateCache('security_config', []);
+
         appWithDeps = express();
         appWithDeps.use(express.json());
         appWithDeps.use('/api/security', createSecurityRouter(securityRepo, {

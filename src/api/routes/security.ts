@@ -188,6 +188,25 @@ export function createSecurityRouter(securityRepo: SecurityRepository, deps?: Se
         return;
       }
 
+      // Reject non-None modes if certificate/key are not configured
+      if (body.mode !== 'None') {
+        const currentConfig = securityRepo.get();
+        if (!currentConfig.certificatePath || !currentConfig.privateKeyConfigured) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `Security mode "${body.mode}" requires a certificate and private key. Generate or upload a certificate first.`,
+              details: [
+                ...(!currentConfig.certificatePath ? [{ field: 'certificatePath', message: 'No certificate configured' }] : []),
+                ...(!currentConfig.privateKeyConfigured ? [{ field: 'privateKeyPath', message: 'No private key configured' }] : []),
+              ],
+            },
+          };
+          res.status(400).json(errorResponse);
+          return;
+        }
+      }
+
       const config = securityRepo.updatePolicy(body.mode);
 
       // Security mode changes require a full runtime restart because
