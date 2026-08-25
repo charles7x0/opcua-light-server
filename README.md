@@ -206,6 +206,44 @@ curl -X PUT http://localhost:3100/api/security/policy \
   -d '{"mode": "SignAndEncrypt"}'
 ```
 
+### Client Certificate Trust (TOFU)
+
+When security mode is set to **Sign** or **SignAndEncrypt**, OPC UA clients must present an X.509 certificate during the secure channel handshake. The server uses a **Trust On First Use (TOFU)** model to manage client certificates:
+
+1. **First connection** — When an unknown client connects, its certificate is automatically stored in `data/pki/trusted/` (accepted) based on the TOFU policy. The server accepts the client immediately without manual intervention.
+2. **Subsequent connections** — The server recognizes the client by its certificate thumbprint (SHA-1 hash). If the certificate matches a trusted entry, the connection proceeds.
+3. **Revocation** — Administrators can reject a previously trusted certificate via the API or web UI. The certificate moves to `data/pki/rejected/` and future connections from that client are refused.
+4. **Re-trust** — A rejected certificate can be moved back to the trusted store if needed.
+
+**PKI directory structure:**
+
+```
+data/pki/
+├── trusted/      # Accepted client certificates (*.der)
+└── rejected/     # Revoked client certificates (*.der)
+```
+
+**Certificate management via API:**
+
+```bash
+# List all client certificates (trusted and rejected)
+curl http://localhost:3100/api/pki/certificates
+
+# Reject a trusted certificate (moves to rejected store, runtime reloads)
+curl -X POST http://localhost:3100/api/pki/certificates/<thumbprint>/reject \
+  -H "Authorization: Bearer $API_KEY"
+
+# Re-trust a rejected certificate
+curl -X POST http://localhost:3100/api/pki/certificates/<thumbprint>/trust \
+  -H "Authorization: Bearer $API_KEY"
+
+# Permanently delete a certificate
+curl -X DELETE http://localhost:3100/api/pki/certificates/<thumbprint> \
+  -H "Authorization: Bearer $API_KEY"
+```
+
+Each trust/reject/delete operation signals the runtime to reload its trust store immediately — no restart required.
+
 ## API Reference
 
 Interactive API documentation is available via Swagger UI at:
