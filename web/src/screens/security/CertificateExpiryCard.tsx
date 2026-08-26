@@ -17,11 +17,15 @@ export function CertificateExpiryCard({ config }: CertificateExpiryCardProps) {
             <dt className="text-sm text-gray-500">Remaining Days:</dt>
             <dd>
               {config.certificateRemainingDays === 0 ? (
-                <span className="text-sm font-semibold text-danger-600">Expired</span>
+                <span className="text-sm font-semibold text-danger-600" role="status">Expired</span>
               ) : config.certificateRemainingDays! < 30 ? (
-                <span className="text-sm font-semibold text-danger-600">{config.certificateRemainingDays}</span>
+                <span className="text-sm font-semibold text-danger-600">
+                  {config.certificateRemainingDays} <span className="sr-only">(expires soon — critical)</span>
+                </span>
               ) : config.certificateRemainingDays! <= 90 ? (
-                <span className="text-sm font-semibold text-warning-600">{config.certificateRemainingDays}</span>
+                <span className="text-sm font-semibold text-warning-600">
+                  {config.certificateRemainingDays} <span className="sr-only">(expiring soon — warning)</span>
+                </span>
               ) : (
                 <span className="text-sm font-semibold text-success-600">{config.certificateRemainingDays}</span>
               )}

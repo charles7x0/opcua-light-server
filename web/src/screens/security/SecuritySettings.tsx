@@ -36,20 +36,29 @@ export function SecuritySettings() {
     );
   }
 
+  const hasCertificate = !!config?.certificatePath;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Security Settings</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Configure OPC UA security mode and certificates.
+          Configure OPC UA transport security between clients and the runtime.
         </p>
       </div>
 
-      <SecurityModeCard currentMode={config?.mode} />
-      {config && <CertificateExpiryCard config={config} />}
+      {/* Security mode is the primary decision — always at the top */}
+      <SecurityModeCard currentMode={config?.mode} hasCertificate={hasCertificate} />
+
+      {/* Certificate details (only relevant when a cert exists) */}
       {config && <CertificateStatusCard config={config} />}
-      <GenerateCertificateCard hasCertificate={!!config?.certificatePath} />
+      {config && <CertificateExpiryCard config={config} />}
+
+      {/* Certificate management */}
+      <GenerateCertificateCard hasCertificate={hasCertificate} />
       <UploadCertificateCard />
+
+      {/* Client certificate trust (TOFU) */}
       <CertificatePanel />
     </div>
   );
