@@ -220,7 +220,14 @@ export function ConnectorsManager(): JSX.Element {
 
       {/* Connection cards */}
       {connections.length === 0 && !showProtocolSelector ? (
-        <p className="text-sm text-gray-500">No connections configured. Click "+ New Connection" to get started.</p>
+        <div className="text-center py-12 px-6 bg-white rounded-lg border border-dashed border-gray-300">
+          <p className="text-3xl mb-3" aria-hidden="true">🔌</p>
+          <p className="text-sm font-medium text-gray-700">No connections configured</p>
+          <p className="text-xs text-gray-500 mt-1 mb-4">Connect to PLCs and industrial devices to read live values into your OPC UA address space.</p>
+          <Button size="sm" onClick={() => setShowProtocolSelector(true)}>
+            + New Connection
+          </Button>
+        </div>
       ) : (
         <div className="space-y-4">
           {/* Protocol summary — one badge per unique protocol type for accessibility */}
@@ -249,6 +256,7 @@ export function ConnectorsManager(): JSX.Element {
                 onAddMapping={(data) => createMappingMutation.mutateAsync(data).then(() => {})}
                 onUpdateMapping={(id, data) => updateMappingMutation.mutateAsync({ id, data }).then(() => {})}
                 onRemoveMapping={(mappingId) => deleteMappingMutation.mutate(mappingId)}
+                defaultExpanded={connections.length <= 2}
               />
             );
           })}
