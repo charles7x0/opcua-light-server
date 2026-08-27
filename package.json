@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Lightweight OPC UA server with Node.js control API, open62541 runtime, and React web UI",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "tsc",
