@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-26T16:40:17.472Z",
+  "generatedAt": "2026-08-27T16:18:53.536Z",
   "security": {
     "mode": "SignAndEncrypt",
     "certificatePath": "J:\\Projects\\opcua-light-server\\data\\certs\\server.der",

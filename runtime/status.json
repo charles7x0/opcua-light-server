@@ -1,1 +1,1 @@
-{"connectedClients":1,"sessions":[{"applicationName":"UaExpert@N0120160","applicationUri":"urn:N0120160:UnifiedAutomation:UaExpert","securityPolicyUri":"http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256","clientAddress":"127.0.0.1:56414","connectTime":"2026-08-26T16:55:21.915Z","sessionState":"Activated"}]}
+{"connectedClients":0,"sessions":[]}

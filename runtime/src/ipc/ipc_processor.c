@@ -63,15 +63,34 @@ static void apply_value_update(UA_Server *server, const char *json_line) {
     cJSON_ArrayForEach(update, updates) {
         cJSON *node_id_item = cJSON_GetObjectItemCaseSensitive(update, "nodeId");
         cJSON *value_item = cJSON_GetObjectItemCaseSensitive(update, "value");
+        cJSON *quality_item = cJSON_GetObjectItemCaseSensitive(update, "quality");
 
         const char *node_id_str = cJSON_GetStringValue(node_id_item);
-        if (!node_id_str || !value_item || cJSON_IsNull(value_item)) continue;
+        if (!node_id_str) continue;
 
         /* Parse the nodeId using shared utility */
         UA_NodeId nodeId = UA_NODEID_NULL;
         if (parse_node_id_string(node_id_str, &nodeId) != 0) {
             continue;
         }
+
+        /* Check quality field — if "bad", write BadNotConnected status without changing value */
+        const char *quality_str = cJSON_GetStringValue(quality_item);
+        if (quality_str && strcmp(quality_str, "bad") == 0) {
+            /* Write BadNotConnected status code to the node */
+            UA_WriteValue wv;
+            UA_WriteValue_init(&wv);
+            wv.nodeId = nodeId;
+            wv.attributeId = UA_ATTRIBUTEID_VALUE;
+            wv.value.hasStatus = UA_TRUE;
+            wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+            wv.value.hasValue = UA_FALSE;
+            UA_Server_write(server, &wv);
+            continue;
+        }
+
+        /* Skip if no value provided (null/missing) and quality is not bad */
+        if (!value_item || cJSON_IsNull(value_item)) continue;
 
         /* Create the value variant based on JSON type */
         UA_Variant value;
@@ -92,7 +111,17 @@ static void apply_value_update(UA_Server *server, const char *json_line) {
             continue;
         }
 
-        UA_StatusCode writeStatus = UA_Server_writeValue(server, nodeId, value);
+        /* Write value with Good status */
+        UA_WriteValue wv;
+        UA_WriteValue_init(&wv);
+        wv.nodeId = nodeId;
+        wv.attributeId = UA_ATTRIBUTEID_VALUE;
+        wv.value.hasValue = UA_TRUE;
+        wv.value.value = value;
+        wv.value.hasStatus = UA_TRUE;
+        wv.value.status = UA_STATUSCODE_GOOD;
+
+        UA_StatusCode writeStatus = UA_Server_write(server, &wv);
         if (writeStatus != UA_STATUSCODE_GOOD) {
             LOG_WARN("Value write failed for '%s': %s",
                      node_id_str, UA_StatusCode_name(writeStatus));
