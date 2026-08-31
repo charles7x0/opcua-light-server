@@ -27,7 +27,7 @@
 
 Check out the [Getting Started](#getting-started) section for full instructions.
 
-1. `npm install`
+1. `npm install && npm install --prefix web`
 2. `npm run build && npm run build:web`
 3. Build the C runtime (see [Getting Started](#getting-started))
 4. `npm start`
@@ -101,8 +101,9 @@ Check out the [Getting Started](#getting-started) section for full instructions.
 ### Install
 
 ```bash
-# Install Node.js dependencies
+# Install Node.js dependencies (API + web UI)
 npm install
+npm install --prefix web
 
 # Copy the environment file
 cp .env.example .env
@@ -396,8 +397,8 @@ MIT — see [LICENSE](LICENSE).
 [badge-typescript]: https://img.shields.io/badge/TypeScript-5-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=3178C6&labelColor=ececec
 [badge-react]: https://img.shields.io/badge/React-18-61DAFB.svg?style=for-the-badge&logo=react&logoColor=61DAFB&labelColor=ececec
 [badge-open62541]: https://img.shields.io/badge/open62541-v1.3.9-orange.svg?style=for-the-badge&labelColor=ececec
-[badge-issues]: https://img.shields.io/github/issues/your-org/opcua-light-server?style=for-the-badge&labelColor=ececec
-[badge-stars]: https://img.shields.io/github/stars/your-org/opcua-light-server?style=for-the-badge&labelColor=ececec
+[badge-issues]: https://img.shields.io/github/issues/charles7x0/opcua-light-server?style=for-the-badge&labelColor=ececec
+[badge-stars]: https://img.shields.io/github/stars/charles7x0/opcua-light-server?style=for-the-badge&labelColor=ececec
 
 <!-- Badge links -->
 [link-license]: https://opensource.org/licenses/MIT
@@ -406,5 +407,5 @@ MIT — see [LICENSE](LICENSE).
 [link-typescript]: https://www.typescriptlang.org/
 [link-react]: https://react.dev/
 [link-open62541]: https://www.open62541.org/
-[link-issues]: https://github.com/your-org/opcua-light-server/issues
-[link-stars]: https://github.com/your-org/opcua-light-server/stargazers
+[link-issues]: https://github.com/charles7x0/opcua-light-server/issues
+[link-stars]: https://github.com/charles7x0/opcua-light-server/stargazers
