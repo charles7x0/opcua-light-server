@@ -184,6 +184,59 @@ For multi-platform builds (amd64 + arm64):
 docker buildx build --platform linux/amd64,linux/arm64 -t your-registry/opcua-light-server:latest --push .
 ```
 
+To build an ARM image and export it as a tarball (no registry):
+
+```bash
+docker buildx build --platform linux/arm64 -t opcua-light-server:arm64 -o type=docker,dest=opcua-arm64.tar .
+```
+
+Then transfer and load on the ARM device:
+
+```bash
+docker load -i opcua-arm64.tar
+```
+
+### Building Behind a Corporate TLS Proxy
+
+Corporate proxies (e.g., Zscaler) intercept TLS and re-sign certificates with their own root CA. The `buildx` builder runs in an isolated container that does not trust this CA, causing:
+
+```
+tls: failed to verify certificate: x509: certificate signed by unknown authority
+```
+
+To fix, point the buildkit builder at your corporate root CA.
+
+1. Locate your corporate root CA certificate (`.pem` or `.crt`) — ask your IT department or export it from your system's trust store.
+
+2. Create a `buildkitd.toml` referencing the CA for Docker Hub registries (use the absolute host path; on Windows escape backslashes):
+
+    ```toml
+    [registry."docker.io"]
+      ca=["/path/to/corporate_root_ca.pem"]
+
+    [registry."registry-1.docker.io"]
+      ca=["/path/to/corporate_root_ca.pem"]
+    ```
+
+3. Recreate the buildx builder with this config:
+
+    ```bash
+    docker buildx rm multiarch
+    docker buildx create --name multiarch --driver docker-container \
+      --driver-opt network=host \
+      --config ./buildkitd.toml --use
+    ```
+
+4. Build as normal — buildx injects the CA into the builder container automatically:
+
+    ```bash
+    docker buildx build --platform linux/arm64 -t opcua-light-server:arm64 \
+      -o type=docker,dest=opcua-arm64.tar .
+    ```
+
+> [!NOTE]
+> The `buildkitd.toml` references a machine-specific absolute path, so it is gitignored. ARM builds compile the C runtime and native modules under QEMU emulation, which is slower than native builds.
+
 ## Configuration
 
 ### Environment Variables
