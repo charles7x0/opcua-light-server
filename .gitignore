@@ -10,3 +10,7 @@ runtime/opcua-runtime.exe
 .env.local
 coverage/
 benchmark_*.csv
+
+# Local buildx config (references machine-specific CA cert path)
+buildkitd.toml
+*.tar
