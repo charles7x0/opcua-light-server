@@ -1,17 +1,39 @@
 import { SelectedNode } from './AddressSpaceTree';
-import { Card, Badge } from '../../components';
+import { Card, Badge, CopyButton } from '../../components';
 
 interface NodeDetailPanelProps {
   selection: SelectedNode | null;
 }
 
+/**
+ * Build the OPC UA NodeId string identifier the same way the runtime does:
+ *   s=<namespaceName>[.<objectPath with '.' separators>].<nodeName>
+ * The object node path uses '/' separators in the UI; the runtime uses '.'.
+ */
+function buildOpcUaNodeId(namespaceName: string, objectNodePath: string, nodeName: string): string {
+  const parentPath = objectNodePath
+    ? `${namespaceName}.${objectNodePath.replace(/\//g, '.')}`
+    : namespaceName;
+  return `s=${parentPath}.${nodeName}`;
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  const isEmpty = !value;
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5" role="group">
       <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
         {label}
       </dt>
-      <dd className="text-sm text-gray-900">{value || '—'}</dd>
+      <dd className="text-sm text-gray-900">
+        {isEmpty ? (
+          <>
+            <span aria-hidden="true">—</span>
+            <span className="sr-only">Not set</span>
+          </>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }
@@ -19,7 +41,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
   if (!selection) {
     return (
-      <div className="flex items-center justify-center h-full p-6 text-sm text-gray-400">
+      <div className="flex items-center justify-center h-full p-6 text-sm text-gray-400" role="status">
         Select a node from the tree to view its details.
       </div>
     );
@@ -29,6 +51,7 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
   const displayPath = objectNodePath
     ? `${namespaceName} / ${objectNodePath.replace(/\//g, ' / ')}`
     : namespaceName;
+  const opcUaNodeId = buildOpcUaNodeId(namespaceName, objectNodePath, node.name);
 
   const formattedValue =
     node.initialValue !== undefined && node.initialValue !== null
@@ -46,19 +69,24 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
 
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <DetailRow label="Data Type" value={
-          <Badge variant="blue">{node.dataType}</Badge>
+          <Badge variant="blue" role={undefined}>{node.dataType}</Badge>
         } />
         <DetailRow label="Current Value" value={
           <code className="text-sm font-mono bg-gray-50 px-1.5 py-0.5 rounded">
             {formattedValue}
           </code>
         } />
+        <DetailRow label="Node ID" value={
+          <span className="flex items-center gap-1.5">
+            <code className="text-sm font-mono bg-gray-50 px-1.5 py-0.5 rounded break-all">
+              {opcUaNodeId}
+            </code>
+            <CopyButton value={opcUaNodeId} label={`Copy node ID ${opcUaNodeId}`} />
+          </span>
+        } />
         <DetailRow label="Namespace" value={namespaceName} />
         <DetailRow label="Parent Path" value={objectNodePath || '(root)'} />
         <DetailRow label="Description" value={node.description} />
-        <DetailRow label="Node ID" value={
-          <code className="text-xs font-mono text-gray-600 break-all">{node.id}</code>
-        } />
       </dl>
 
       <Card className="!border-t !border-x-0 !border-b-0 !rounded-none" padding={false}>
@@ -67,27 +95,21 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
             Metadata
           </h3>
           <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
-            <div>
+            <div role="group">
               <dt className="text-gray-500">Created</dt>
               <dd className="text-gray-700">
-                {new Date(node.createdAt).toLocaleString()}
+                <time dateTime={new Date(node.createdAt).toISOString()}>
+                  {new Date(node.createdAt).toLocaleString()}
+                </time>
               </dd>
             </div>
-            <div>
+            <div role="group">
               <dt className="text-gray-500">Updated</dt>
               <dd className="text-gray-700">
-                {new Date(node.updatedAt).toLocaleString()}
+                <time dateTime={new Date(node.updatedAt).toISOString()}>
+                  {new Date(node.updatedAt).toLocaleString()}
+                </time>
               </dd>
-            </div>
-            {node.objectNodeId && (
-              <div>
-                <dt className="text-gray-500">Object Node ID</dt>
-                <dd className="text-gray-700 font-mono">{node.objectNodeId}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-gray-500">Namespace ID</dt>
-              <dd className="text-gray-700 font-mono">{node.namespaceId}</dd>
             </div>
           </dl>
         </div>
