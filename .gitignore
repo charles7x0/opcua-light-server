@@ -6,6 +6,8 @@ web/dist/
 runtime/build/
 runtime/opcua-runtime
 runtime/opcua-runtime.exe
+runtime/config.json
+runtime/status.json
 .env
 .env.local
 coverage/
