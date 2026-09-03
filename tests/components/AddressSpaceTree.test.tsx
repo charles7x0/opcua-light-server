@@ -180,6 +180,7 @@ describe('AddressSpaceTree', () => {
     expect(onNodeSelect).toHaveBeenCalledWith({
       node: { id: 'n-1', namespaceId: 'ns-1', objectNodeId: null, name: 'Sensor1', dataType: 'Double', createdAt: '', updatedAt: '' },
       namespaceName: 'PlantFloor',
+      namespaceIndex: 2,
       objectNodePath: '',
     });
   });
