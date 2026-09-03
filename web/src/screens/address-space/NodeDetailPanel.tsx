@@ -6,15 +6,25 @@ interface NodeDetailPanelProps {
 }
 
 /**
- * Build the OPC UA NodeId string identifier the same way the runtime does:
- *   s=<namespaceName>[.<objectPath with '.' separators>].<nodeName>
+ * Build the OPC UA NodeId the same way the runtime does:
+ *   ns=<namespaceIndex>;s=<namespaceName>[.<objectPath with '.' separators>].<nodeName>
  * The object node path uses '/' separators in the UI; the runtime uses '.'.
+ *
+ * The namespace index is computed by AddressSpaceTree to mirror the runtime's
+ * registration order (see ConfigGenerator.buildNamespaces): namespaces are sorted
+ * by name and assigned indices starting at 2 (ns=0 is the OPC UA base namespace,
+ * ns=1 is the server's own namespace).
  */
-function buildOpcUaNodeId(namespaceName: string, objectNodePath: string, nodeName: string): string {
+function buildOpcUaNodeId(
+  namespaceIndex: number,
+  namespaceName: string,
+  objectNodePath: string,
+  nodeName: string
+): string {
   const parentPath = objectNodePath
     ? `${namespaceName}.${objectNodePath.replace(/\//g, '.')}`
     : namespaceName;
-  return `s=${parentPath}.${nodeName}`;
+  return `ns=${namespaceIndex};s=${parentPath}.${nodeName}`;
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -47,11 +57,11 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
     );
   }
 
-  const { node, namespaceName, objectNodePath } = selection;
+  const { node, namespaceName, namespaceIndex, objectNodePath } = selection;
   const displayPath = objectNodePath
     ? `${namespaceName} / ${objectNodePath.replace(/\//g, ' / ')}`
     : namespaceName;
-  const opcUaNodeId = buildOpcUaNodeId(namespaceName, objectNodePath, node.name);
+  const opcUaNodeId = buildOpcUaNodeId(namespaceIndex, namespaceName, objectNodePath, node.name);
 
   const formattedValue =
     node.initialValue !== undefined && node.initialValue !== null
@@ -77,11 +87,17 @@ export default function NodeDetailPanel({ selection }: NodeDetailPanelProps) {
           </code>
         } />
         <DetailRow label="Node ID" value={
-          <span className="flex items-center gap-1.5">
-            <code className="text-sm font-mono bg-gray-50 px-1.5 py-0.5 rounded break-all">
-              {opcUaNodeId}
-            </code>
-            <CopyButton value={opcUaNodeId} label={`Copy node ID ${opcUaNodeId}`} />
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5">
+              <code className="text-sm font-mono bg-gray-50 px-1.5 py-0.5 rounded break-all">
+                {opcUaNodeId}
+              </code>
+              <CopyButton value={opcUaNodeId} label={`Copy node ID ${opcUaNodeId}`} />
+            </span>
+            <span className="text-xs text-gray-500">
+              The namespace index (ns) reflects the runtime registration order and
+              may change if namespaces are added or removed.
+            </span>
           </span>
         } />
         <DetailRow label="Namespace" value={namespaceName} />

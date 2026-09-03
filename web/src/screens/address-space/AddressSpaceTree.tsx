@@ -6,6 +6,7 @@ import { Button, Input, Alert } from '../../components';
 export interface SelectedNode {
   node: OpcUaNode;
   namespaceName: string;
+  namespaceIndex: number;
   objectNodePath: string;
 }
 
@@ -136,6 +137,7 @@ function ObjectNodeTreeItem({
   level,
   nodes,
   namespaceName,
+  namespaceIndex,
   namespaceId,
   objectNodePath,
   selectedNodeId,
@@ -146,6 +148,7 @@ function ObjectNodeTreeItem({
   level: number;
   nodes: OpcUaNode[];
   namespaceName: string;
+  namespaceIndex: number;
   namespaceId: string;
   objectNodePath: string;
   selectedNodeId?: string;
@@ -222,6 +225,7 @@ function ObjectNodeTreeItem({
           level={level + 1}
           nodes={nodes}
           namespaceName={namespaceName}
+          namespaceIndex={namespaceIndex}
           namespaceId={namespaceId}
           objectNodePath={currentPath}
           selectedNodeId={selectedNodeId}
@@ -246,7 +250,7 @@ function ObjectNodeTreeItem({
           level={level + 1}
           selected={node.id === selectedNodeId}
           onClick={() =>
-            onNodeSelect({ node, namespaceName, objectNodePath: currentPath })
+            onNodeSelect({ node, namespaceName, namespaceIndex, objectNodePath: currentPath })
           }
         />
       ))}
@@ -256,10 +260,12 @@ function ObjectNodeTreeItem({
 
 function NamespaceTreeNode({
   namespace,
+  namespaceIndex,
   selectedNodeId,
   onNodeSelect,
 }: {
   namespace: Namespace;
+  namespaceIndex: number;
   selectedNodeId?: string;
   onNodeSelect: (selection: SelectedNode | null) => void;
 }) {
@@ -321,6 +327,7 @@ function NamespaceTreeNode({
           level={1}
           nodes={namespaceNodes}
           namespaceName={namespace.name}
+          namespaceIndex={namespaceIndex}
           namespaceId={namespace.id}
           objectNodePath=""
           selectedNodeId={selectedNodeId}
@@ -345,7 +352,7 @@ function NamespaceTreeNode({
           level={1}
           selected={node.id === selectedNodeId}
           onClick={() =>
-            onNodeSelect({ node, namespaceName: namespace.name, objectNodePath: '' })
+            onNodeSelect({ node, namespaceName: namespace.name, namespaceIndex, objectNodePath: '' })
           }
         />
       ))}
@@ -358,6 +365,11 @@ export default function AddressSpaceTree({ onNodeSelect, selectedNodeId }: Addre
     queryKey: ['namespaces'],
     queryFn: getNamespaces,
   });
+
+  // The runtime registers namespaces sorted by name and assigns indices starting
+  // at 2 (ns=0 is the OPC UA base, ns=1 is the server's own namespace). This must
+  // mirror ConfigGenerator.buildNamespaces so the displayed NodeId matches the runtime.
+  const orderedNamespaces = [...namespaces].sort((a, b) => a.name.localeCompare(b.name));
 
   if (isLoading) {
     return (
@@ -388,10 +400,11 @@ export default function AddressSpaceTree({ onNodeSelect, selectedNodeId }: Addre
       <h2 className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
         Address Space
       </h2>
-      {namespaces.map((ns) => (
+      {orderedNamespaces.map((ns, index) => (
         <NamespaceTreeNode
           key={ns.id}
           namespace={ns}
+          namespaceIndex={index + 2}
           selectedNodeId={selectedNodeId}
           onNodeSelect={onNodeSelect}
         />
