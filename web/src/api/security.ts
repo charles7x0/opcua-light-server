@@ -40,6 +40,20 @@ export function generateCertificate(options: GenerateCertificateOptions = {}): P
   });
 }
 
+export interface SuggestedSans {
+  ipAddresses: string[];
+  dnsNames: string[];
+}
+
+/**
+ * Fetch the server's auto-detected Subject Alternative Name suggestions
+ * (loopback, localhost, interface IPs, and CERT_EXTRA_HOSTS hints) used to
+ * pre-populate the Generate Certificate form.
+ */
+export function getSuggestedSans(): Promise<SuggestedSans> {
+  return request<SuggestedSans>('/security/suggested-sans');
+}
+
 export function getCertificateDownloadUrl(format?: 'der' | 'pem'): string {
   const base = `${BASE_URL}/security/certificate/download`;
   if (format === 'pem') {

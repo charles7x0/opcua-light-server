@@ -10,6 +10,7 @@ vi.mock('../../web/src/api', () => ({
   updateSecurityPolicy: vi.fn(),
   uploadCertificate: vi.fn(),
   generateCertificate: vi.fn(),
+  getSuggestedSans: vi.fn().mockResolvedValue({ ipAddresses: [], dnsNames: [] }),
   getCertificateDownloadUrl: vi.fn(),
   browseFiles: vi.fn(),
   getPkiCertificates: vi.fn().mockResolvedValue([]),

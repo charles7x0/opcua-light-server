@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { generateCertificate, ApiError } from '../../api';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { generateCertificate, getSuggestedSans, ApiError } from '../../api';
 import { Button, Textarea, FormField, Card, CardHeader, Alert, ConfirmDialog } from '../../components';
 import { isValidDnsName, isValidIpAddress, parseMultiInput, MAX_SAN_ENTRIES } from './utils/sanValidation';
 
@@ -17,17 +17,38 @@ export function GenerateCertificateCard({ hasCertificate }: GenerateCertificateC
   const queryClient = useQueryClient();
   const [dnsNamesInput, setDnsNamesInput] = useState('');
   const [ipAddressesInput, setIpAddressesInput] = useState('');
+  const [prefilled, setPrefilled] = useState(false);
   const [generateErrors, setGenerateErrors] = useState<GenerateFormErrors>({});
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generateSuccess, setGenerateSuccess] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Load server-suggested SANs (loopback, localhost, interface IPs, CERT_EXTRA_HOSTS)
+  // to pre-populate the form so users see sensible defaults instead of empty fields.
+  const { data: suggestedSans } = useQuery({
+    queryKey: ['security', 'suggested-sans'],
+    queryFn: getSuggestedSans,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Seed the inputs once from the suggestions, only if the user has not typed
+  // anything yet. This preserves any in-progress edits.
+  useEffect(() => {
+    if (!suggestedSans || prefilled) return;
+    if (dnsNamesInput.trim() === '' && ipAddressesInput.trim() === '') {
+      setDnsNamesInput(suggestedSans.dnsNames.join(', '));
+      setIpAddressesInput(suggestedSans.ipAddresses.join(', '));
+    }
+    setPrefilled(true);
+  }, [suggestedSans, prefilled, dnsNamesInput, ipAddressesInput]);
+
   const generateMutation = useMutation({
     mutationFn: (options: Parameters<typeof generateCertificate>[0]) => generateCertificate(options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security'] });
-      setDnsNamesInput('');
-      setIpAddressesInput('');
+      // Reset the form back to the suggested defaults rather than fully empty.
+      setDnsNamesInput(suggestedSans ? suggestedSans.dnsNames.join(', ') : '');
+      setIpAddressesInput(suggestedSans ? suggestedSans.ipAddresses.join(', ') : '');
       setGenerateError(null);
       setGenerateErrors({});
       setGenerateSuccess(true);
