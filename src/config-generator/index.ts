@@ -57,8 +57,13 @@ interface ConnectorMappingRow {
  * the JSON configuration file consumed by the open62541 runtime.
  */
 export class ConfigGenerator {
+  /**
+   * @param database - The SQLite database wrapper.
+   * @param port - TCP port the runtime should bind to. Defaults to 4840.
+   */
   constructor(
     private readonly database: Database,
+    private readonly port: number = 4840,
   ) {}
 
   /**
@@ -73,6 +78,7 @@ export class ConfigGenerator {
     return {
       version: 1,
       generatedAt: new Date().toISOString(),
+      port: this.port,
       security,
       namespaces,
     };

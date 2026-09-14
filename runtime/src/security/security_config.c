@@ -94,12 +94,12 @@ static int pem_to_der(UA_ByteString *privateKey) {
 
 /* ─── Security Configuration ───────────────────────────────────────────────── */
 
-int security_configure(RuntimeContext *ctx, cJSON *security_json) {
+int security_configure(RuntimeContext *ctx, cJSON *security_json, int port) {
     UA_Server *server = ctx->server;
 
     if (!security_json || !cJSON_IsObject(security_json)) {
-        LOG_INFO("No security configuration, using defaults (SecurityMode: None)");
-        UA_ServerConfig_setDefault(UA_Server_getConfig(server));
+        LOG_INFO("No security configuration, using defaults (SecurityMode: None) on port %d", port);
+        UA_ServerConfig_setMinimal(UA_Server_getConfig(server), (UA_UInt16)port, NULL);
         return 0;
     }
 
@@ -112,8 +112,8 @@ int security_configure(RuntimeContext *ctx, cJSON *security_json) {
     const char *key_path = cJSON_GetStringValue(key_path_item);
 
     if (!mode || strcmp(mode, "None") == 0) {
-        LOG_INFO("Security mode: None");
-        UA_ServerConfig_setDefault(UA_Server_getConfig(server));
+        LOG_INFO("Security mode: None on port %d", port);
+        UA_ServerConfig_setMinimal(UA_Server_getConfig(server), (UA_UInt16)port, NULL);
         return 0;
     }
 
@@ -158,7 +158,7 @@ int security_configure(RuntimeContext *ctx, cJSON *security_json) {
      * This registers Basic128Rsa15, Basic256, Basic256Sha256 AND None. */
     UA_StatusCode retval = UA_ServerConfig_setDefaultWithSecurityPolicies(
         UA_Server_getConfig(server),
-        4840,         /* port */
+        (UA_UInt16)port, /* port (from config, default 4840) */
         &certificate,
         &privateKey,
         NULL, 0,      /* trust list (empty — accept all client certs) */

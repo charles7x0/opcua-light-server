@@ -9,6 +9,8 @@ import type { OpcUaDataType } from './index.js';
 export interface AddressSpaceConfig {
   version: number;
   generatedAt: string;
+  /** TCP port the OPC UA runtime binds to. Defaults to 4840 when omitted. */
+  port?: number;
   security: SecurityConfigOutput;
   namespaces: NamespaceConfig[];
 }

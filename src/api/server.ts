@@ -48,7 +48,7 @@ async function main(): Promise<void> {
 
   // ─── Create Dependencies ────────────────────────────────────────────────────
   const processManager = new ProcessManager(runtimePath, configPath);
-  const configGenerator = new ConfigGenerator(database);
+  const configGenerator = new ConfigGenerator(database, opcuaPort);
   const authConfig = loadAuthConfig();
 
   // ─── Initialize TOFU Manager ────────────────────────────────────────────────

@@ -150,9 +150,21 @@ int server_create(RuntimeContext *ctx) {
         return -1;
     }
 
-    /* 3. Configure security */
+    /* 3. Determine bind port from config (top-level "port"), default 4840.
+     * Store it on the context so server_run can log the actual port. */
+    {
+        cJSON *port_item = cJSON_GetObjectItemCaseSensitive(config, "port");
+        int port = 4840;
+        if (cJSON_IsNumber(port_item) && port_item->valueint > 0 &&
+            port_item->valueint <= 65535) {
+            port = port_item->valueint;
+        }
+        ctx->port = port;
+    }
+
+    /* 4. Configure security */
     cJSON *security = cJSON_GetObjectItemCaseSensitive(config, "security");
-    if (security_configure(ctx, security) != 0) {
+    if (security_configure(ctx, security, ctx->port) != 0) {
         LOG_ERROR("Security configuration failed");
         UA_Server_delete(ctx->server);
         ctx->server = NULL;
@@ -162,7 +174,7 @@ int server_create(RuntimeContext *ctx) {
 
     LOG_INFO("OPC UA server configured");
 
-    /* 4. Build address space */
+    /* 5. Build address space */
     LOG_INFO("Building address space...");
     if (address_space_build(ctx->server, config) != 0) {
         LOG_ERROR("Failed to build address space");
@@ -174,7 +186,7 @@ int server_create(RuntimeContext *ctx) {
 
     LOG_INFO("Address space built successfully.");
 
-    /* 5. Free config */
+    /* 6. Free config */
     cJSON_Delete(config);
 
     return 0;
@@ -198,7 +210,7 @@ UA_StatusCode server_run(RuntimeContext *ctx) {
                                   ctx, 500.0, NULL);
 
     /* 4. Run the server (blocks until g_running becomes false) */
-    LOG_INFO("Starting OPC UA server on port 4840...");
+    LOG_INFO("Starting OPC UA server on port %d...", ctx->port > 0 ? ctx->port : 4840);
     UA_StatusCode status = UA_Server_run(ctx->server, (volatile UA_Boolean *)&g_running);
 
     return status;

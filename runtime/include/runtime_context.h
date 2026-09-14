@@ -16,6 +16,9 @@ typedef struct {
     char config_path[4096];
     char status_path[4096];
 
+    /* TCP bind port (from config "port", default 4840) */
+    int port;
+
     /* TOFU verifier state */
     TofuVerifierContext tofu_ctx;
 
