@@ -58,6 +58,28 @@ export function createSecurityRouter(securityRepo: SecurityRepository, deps?: Se
   });
 
   /**
+   * GET /api/security/suggested-sans
+   * Returns the auto-detected Subject Alternative Name entries the server would
+   * use when generating a certificate without explicit inputs: loopback,
+   * localhost, container/host interface IPs, and any CERT_EXTRA_HOSTS hints.
+   * Used by the Web UI to pre-populate the Generate Certificate form.
+   */
+  router.get('/suggested-sans', (_req: Request, res: Response): void => {
+    try {
+      const { ipAddresses, dnsNames } = getAutoFillHosts();
+      res.json({ ipAddresses, dnsNames });
+    } catch (err) {
+      const errorResponse: ErrorResponse = {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Failed to determine suggested SANs',
+        },
+      };
+      res.status(500).json(errorResponse);
+    }
+  });
+
+  /**
    * GET /api/security/certificate/download
    * Downloads the server's public certificate in DER or PEM format.
    * The file path is read from the database — no user-supplied paths accepted.
