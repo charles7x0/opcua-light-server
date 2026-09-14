@@ -390,13 +390,17 @@ export function createSecurityRouter(securityRepo: SecurityRepository, deps?: Se
         return;
       }
 
-      // Auto-detect IP addresses from network interfaces when not provided
-      const detectedIps = getLocalIpAddresses();
+      // Auto-detect IP addresses (container interfaces + Docker gateway + env hints)
+      // when the caller did not provide any explicitly.
+      const { ipAddresses: detectedIps, dnsNames: detectedDns } = getAutoFillHosts();
       const ipAddresses = trimmedBody.ipAddresses && trimmedBody.ipAddresses.length > 0
         ? trimmedBody.ipAddresses
         : detectedIps;
 
-      const dnsNames = trimmedBody.dnsNames ?? [];
+      // Merge caller-provided DNS names with auto-detected ones (env hints).
+      const dnsNames = Array.from(
+        new Set([...(trimmedBody.dnsNames ?? []), ...detectedDns])
+      );
 
       // Generate certificate
       const certOutputPath = resolve('data/certs/server.der');
@@ -450,4 +454,45 @@ function getLocalIpAddresses(): string[] {
   }
 
   return Array.from(ips);
+}
+
+/** Simple IPv4 dotted-decimal test used to route env hints to IP vs DNS SANs. */
+function looksLikeIpv4(value: string): boolean {
+  const parts = value.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+}
+
+/**
+ * Build the auto-fill SAN entries for certificate generation.
+ *
+ * A process running inside a container cannot discover the Docker host's LAN IP
+ * on its own — it only sees its own interfaces. This function therefore collects:
+ *   - 127.0.0.1 and localhost (always)
+ *   - the container's own non-internal IPv4 addresses (from network interfaces)
+ *   - additional hosts supplied via the CERT_EXTRA_HOSTS environment variable
+ *     (comma/space separated). This is the reliable way to inject the real
+ *     Docker host IP/hostname at deploy time, e.g.:
+ *       CERT_EXTRA_HOSTS="192.168.1.50,opcua.mycompany.local"
+ *
+ * Entries that parse as IPv4 are returned as IP SANs; everything else is
+ * treated as a DNS SAN. 127.0.0.1 is added by the generator regardless.
+ */
+function getAutoFillHosts(): { ipAddresses: string[]; dnsNames: string[] } {
+  const ipSet = new Set<string>(getLocalIpAddresses());
+  const dnsSet = new Set<string>(['localhost']);
+
+  const extra = process.env.CERT_EXTRA_HOSTS;
+  if (extra && extra.trim().length > 0) {
+    const tokens = extra.split(/[,\s]+/).map((t) => t.trim()).filter((t) => t.length > 0);
+    for (const token of tokens) {
+      if (looksLikeIpv4(token)) {
+        ipSet.add(token);
+      } else {
+        dnsSet.add(token);
+      }
+    }
+  }
+
+  return { ipAddresses: Array.from(ipSet), dnsNames: Array.from(dnsSet) };
 }
