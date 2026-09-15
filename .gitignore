@@ -21,3 +21,10 @@ tsconfig.tsbuildinfo
 
 # Generated certificates and private keys
 data/certs/
+
+# Runtime-managed PKI trust store (client certs added via TOFU).
+# Keep the directories (via .gitkeep) but ignore their cert contents.
+data/pki/trusted/*
+data/pki/rejected/*
+!data/pki/trusted/.gitkeep
+!data/pki/rejected/.gitkeep
