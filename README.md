@@ -4,9 +4,11 @@
 
 <br/>
 
-<img src="docs/images/OPCUA_Light_Server-_Logo-removebg-preview.png" width="350" title=" Lightweight OPC UA server Logo">
+<img src="docs/images/OPCUA_Light_Server-_Logo-removebg-preview.png" width="350" alt="OPC UA Light Server — lightweight open-source OPC UA server logo">
 
 <br/>
+
+# OPC UA Light Server
 
 [![Node.js][badge-nodejs]][link-nodejs]
 [![Express][badge-express]][link-express]
@@ -14,7 +16,7 @@
 [![React][badge-react]][link-react]
 [![open62541][badge-open62541]][link-open62541]
 
-### Lightweight OPC UA server with multi-protocol PLC integration
+### Lightweight, self-hosted OPC UA server with multi-protocol PLC integration (Siemens S7, Modbus TCP, EtherNet/IP, PCCC)
 
 <br/>
 
@@ -22,6 +24,10 @@
 [![GitHub Stars][badge-stars]][link-stars]
 
 </div>
+
+**OPC UA Light Server** is a free, open-source, self-hosted OPC UA server for industrial IoT and SCADA systems. It bridges industrial PLCs — Siemens S7, Modbus TCP, Rockwell EtherNet/IP, and Allen-Bradley PCCC — into an [OPC UA](https://opcfoundation.org/about/opc-technologies/opc-ua/) address space, then serves them over the standard OPC-UA protocol (TCP port 4840) to any OPC UA client. Built on the [open62541](https://www.open62541.org/) C runtime with a Node.js REST API and a React web dashboard, it runs anywhere Docker runs and needs zero external infrastructure.
+
+Use it as an OPC UA gateway, a PLC-to-OPC-UA bridge, a Modbus-to-OPC-UA converter, or a lightweight OPC UA test server for development.
 
 ## Quick Start
 
